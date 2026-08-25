@@ -1,3 +1,4 @@
+import json
 import argparse
 import colorsys
 from collections.abc import Iterable
@@ -113,6 +114,23 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--saturation-threshold", type=float, default=150)
     return parser.parse_args()
 
+def extract_pixel_coordinates(Seed):
+    folder_name = "resources"
+    file_name = "pixels.json"
+    pixel_coordinates = list(Seed.pixels)
+    script_dir = Path(__file__).parent.parent
+    target_path = script_dir / folder_name / file_name
+    with open(target_path, 'w') as f:
+            json.dump(pixel_coordinates, f, indent = 4)
+    
+
+
+def find_largest_seed(seeds: list[Seed], output_path: Path):
+    largest_seed = max(seeds, key=lambda seed: len(seed.pixels))
+    largest_path = arguments.output.with_name(f"{arguments.output.stem}_largest{arguments.output.suffix}")
+    draw_seeds(arguments.image, [largest_seed], largest_path)
+    print(f"Saved largest seed overlay to {largest_path}")
+    extract_pixel_coordinates(largest_seed)
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -123,5 +141,6 @@ if __name__ == "__main__":
         min_pixels=arguments.min_pixels,
         saturation_threshold=arguments.saturation_threshold,
     )
+    find_largest_seed(found_seeds, arguments.output)
     draw_seeds(arguments.image, found_seeds, arguments.output)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
