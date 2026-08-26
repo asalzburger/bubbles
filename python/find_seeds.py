@@ -127,8 +127,6 @@ def extract_pixel_coordinates(Seed):
 def find_largest_seed(seeds: list[Seed], i = 0):
     largest_seed = max(seeds, key=lambda seed: len(seed.pixels))
     largest_seed_index = seeds.index(max(seeds, key=lambda seed: len(seed.pixels)))
-    #largest_path = arguments.output.with_name(f"{arguments.output.stem}_largest{arguments.output.suffix}")
-    #draw_seeds(arguments.image, [largest_seed], largest_path)
     print(f"Found largest seed at index {largest_seed_index}: {largest_seed}")
     match i:
         case 0:

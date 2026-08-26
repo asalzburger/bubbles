@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
-from sympy import Point, Line
+from sympy import Point, Point2D, Line, evalf
 from collections import Counter
 import itertools
+import Circle
 
 Intersects = []
 def transform(x, y, m = 0):
@@ -38,4 +39,7 @@ def find_n_most_common_points(n, m0, mmax):
     n_most_common_intersects = counter.most_common(n)
     return n_most_common_intersects
 
-print("Intersects: ", find_n_most_common_points(4, 0, 1))
+def createLine(trf: Point2D):
+    p = Point(0, trf.y.evalf())
+    m = trf.x.evalf()
+    return Line(p, slope = m)
