@@ -9,16 +9,21 @@ import numpy as np
 import colorsys
 
 Intersects = []
+
+# simple transform function
 def transform(x, y, m = 0):
     t = -m*x+y
+
     return t
 
+# function to calculate the intersection point
 def get_intersection_point(m0, m1, x1, y1, x2, y2):
     l1 = Line(Point(m0, transform(x1, y1, m0)), Point(m1, transform(x1, y1, m1)))
     l2 = Line(Point(m0, transform(x2, y2, m0)), Point(m1, transform(x2, y2, m1)))
     intersection_point = l1.intersection(l2)
     return intersection_point
 
+# function to draw lines in a diagram to manually show intersection points
 def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixels.json"):
     script_dir = Path(__file__).parent.parent
     linesToDraw = []
@@ -44,10 +49,26 @@ def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixe
             lines_draw.line([linesToDraw[i][0], linesToDraw[i][1]], fill=color,width=1)
         Image.alpha_composite(image_background, lines_overlay).save(out_path)
 
-
-        
+# histogram function for the hough transform
+def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step):
+    m_values = np.arange(m_min, m_max, m_step)
+    t_values = np.arange(t_min, t_max, t_step)
     
-
+    # Create a 2D array to count votes
+    # Index 0 is m, Index 1 is t
+    accumulator = np.zeros((len(m_values), len(t_values)), dtype=int)
+    
+    for x, y in pixels:
+        for i, m in enumerate(m_values):
+            t = -m * x + y
+            # Find the closest t index
+            j = np.argmin(np.abs(t_values - t))
+            # Increment the vote
+            accumulator[i, j] += 1
+            
+    return m_values, t_values, accumulator
+    
+# generate intersection points from a file
 def intersect_available_lines_via_file(m0, m1, file_name = "pixels.json"):
     script_dir = Path(__file__).parent.parent
     target_path = script_dir / "resources" / file_name
@@ -121,19 +142,21 @@ def intersect_available_lines_vectorized(m0, m1, file_name="pixels.json"): # thi
     ])
     print(f"Created {len(Intersects)} intersection points.")
 
-    
+# function to return the most common point
 def find_most_common_point(m0 = 0, mmax = 1):
     intersect_available_lines_via_file(m0, mmax)
     counter = Counter(Intersects)
     most_common_intersect = counter.most_common(1)[0][0]
     return most_common_intersect
 
+# simple function to return a list of the nth most common points and their frequency
 def find_n_most_common_points(n, m0= 0, mmax = 1):
     intersect_available_lines_vectorized(m0, mmax)
     counter = Counter(Intersects)
     n_most_common_intersects = counter.most_common(n)
     return n_most_common_intersects
 
+# function to return the nth most common point
 def find_n_most_common_point(n, m0= 0, mmax = 1):
     intersect_available_lines_vectorized(m0, mmax)
     counter = Counter(Intersects)
@@ -143,11 +166,13 @@ def find_n_most_common_point(n, m0= 0, mmax = 1):
     n_most_common_intersects = counter.most_common(n + 1)[n][0]
     return n_most_common_intersects
 
+# function to create a line from a point where (x|y) is (m|t)
 def createLine(trf: Point2D):
     p = Point(0, trf.y.evalf())
     m = trf.x.evalf()
     return Line(p, slope = m)
 
+# function to draw lines onto the seed
 def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax):
     with Image.open(image_path) as image:
         annotated_image = image.convert("RGBA")
