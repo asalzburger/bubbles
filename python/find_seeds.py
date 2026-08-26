@@ -124,13 +124,29 @@ def extract_pixel_coordinates(Seed):
             json.dump(pixel_coordinates, f, indent = 4)
     
 
-
-def find_largest_seed(seeds: list[Seed], output_path: Path):
+def find_largest_seed(seeds: list[Seed], i = 0):
     largest_seed = max(seeds, key=lambda seed: len(seed.pixels))
-    largest_path = arguments.output.with_name(f"{arguments.output.stem}_largest{arguments.output.suffix}")
-    draw_seeds(arguments.image, [largest_seed], largest_path)
-    print(f"Saved largest seed overlay to {largest_path}")
-    extract_pixel_coordinates(largest_seed)
+    largest_seed_index = seeds.index(max(seeds, key=lambda seed: len(seed.pixels)))
+    #largest_path = arguments.output.with_name(f"{arguments.output.stem}_largest{arguments.output.suffix}")
+    #draw_seeds(arguments.image, [largest_seed], largest_path)
+    print(f"Found largest seed at index {largest_seed_index}: {largest_seed}")
+    match i:
+        case 0:
+            #print("Returning index of largest seed!", largest_seed_index)
+            return(largest_seed_index)
+        case 1:
+            #print("Returning largest seed!", largest_index)
+            return(largest_seed)
+        case 2:
+            #print("Returning index and largest seed!", largest_seed_index, largest_seed)
+            return(largest_seed, largest_seed_index)
+
+def save_specific_seed(seeds: list[Seed], n: int):
+    chosen_seed  = seeds[n]
+    chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
+    draw_seeds(arguments.image, [chosen_seed], chosen_path)
+    print(f"Saved overlay for seed {n} to {chosen_path}")
+    extract_pixel_coordinates(chosen_seed)
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -141,6 +157,6 @@ if __name__ == "__main__":
         min_pixels=arguments.min_pixels,
         saturation_threshold=arguments.saturation_threshold,
     )
-    find_largest_seed(found_seeds, arguments.output)
+    save_specific_seed(found_seeds, find_largest_seed(found_seeds))
     draw_seeds(arguments.image, found_seeds, arguments.output)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")

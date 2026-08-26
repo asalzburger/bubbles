@@ -20,20 +20,22 @@ def intersect_available_lines(m0, m1, file_name = "pixels.json"):
     target_path = script_dir / "resources" / file_name
     with open(target_path, 'r') as file:
         pixels = json.load(file)
-        #pixels_length = len(pixels)
         for point1, point2 in itertools.combinations(pixels, 2):
             x1, y1 = point1
             x2, y2 = point2
             Intersects.extend(get_intersection_point(m0, m1, x1, y1, x2, y2))
-            #print(get_intersection_point(m0, m1, x1, y1, x2, y2))
         #print(Intersects)
 
 def find_most_common_point(m0 = 0, mmax = 1):
     intersect_available_lines(m0, mmax)
-    flat_intersects = [p for sublist in Intersects for p in sublist]
-    counter = Counter(flat_intersects)
+    counter = Counter(Intersects)
     most_common_intersect = counter.most_common(1)[0][0]
     return most_common_intersect
 
-#print("Intersect: ", find_most_common_point())
-#intersect_available_lines(0, 1)
+def find_n_most_common_points(n, m0, mmax):
+    intersect_available_lines(m0, mmax)
+    counter = Counter(Intersects)
+    n_most_common_intersects = counter.most_common(n)
+    return n_most_common_intersects
+
+print("Intersects: ", find_n_most_common_points(4, 0, 1))
