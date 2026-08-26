@@ -1,4 +1,4 @@
-from sympy import symbols, Eq, solve, Point2D, evalf
+from sympy import symbols, Eq, solve, Point2D, evalf, N
 from operator import itemgetter
 
 
@@ -56,14 +56,20 @@ def ConvertTupletoPoint2D(t: tuple):
     y = itemgetter(1)(t)
     return Point2D(x, y)
 
-def IsPointOnCircle(p1: Point2D, p2: Point2D, p3: Point2D, ptest: Point2D):
-    x = ptest.x.evalf()
-    y = ptest.y.evalf()
-    r = calculateRadiusfromPoints(p1, p2, p3)
-    h = calculateMidPointfromPoints(p1, p2, p3).x.evalf()
-    k = calculateMidPointfromPoints(p1, p2, p3).y.evalf()
-    if ((x-h)**2) + ((y-k)**2) == r**2:
-        return True
-    else:
-        return False
+def ConvertPoint2DtoTuple(p: Point2D):
+    x = int(p.x.evalf())
+    y = int(p.y.evalf())
+    return (x, y)
 
+def IsPointOnCircle(p1: Point2D, p2: Point2D, p3: Point2D, ptest: Point2D, tolerance: float = 0.5):
+    x = float(ptest.x)
+    y = float(ptest.y)
+    r = calculateRadiusfromPoints(p1, p2, p3)
+    center = calculateMidPointfromPoints(p1, p2, p3)
+    h = N(center.x)
+    k = N(center.y)
+
+    dist_sq = (x - h)**2 +(y - k)**2
+    r_sq = float(r)**2
+
+    return abs(dist_sq - r_sq) <= tolerance * (2 * float(r) + tolerance)

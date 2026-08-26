@@ -4,6 +4,7 @@ import colorsys
 from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+import transform
 
 from PIL import Image, ImageDraw
 
@@ -112,6 +113,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--slice-height", type=int, default=10)
     parser.add_argument("--min-pixels", type=int, default=5)
     parser.add_argument("--saturation-threshold", type=float, default=150)
+    parser.add_argument("--slope-min", type=float, default=0)
+    parser.add_argument("--slope-max", type=float, default=1)
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -127,7 +130,7 @@ def extract_pixel_coordinates(Seed):
 def find_largest_seed(seeds: list[Seed], i = 0):
     largest_seed = max(seeds, key=lambda seed: len(seed.pixels))
     largest_seed_index = seeds.index(max(seeds, key=lambda seed: len(seed.pixels)))
-    print(f"Found largest seed at index {largest_seed_index}: {largest_seed}")
+    print(f"Found largest seed at index {largest_seed_index}")
     match i:
         case 0:
             #print("Returning index of largest seed!", largest_seed_index)
@@ -142,7 +145,9 @@ def find_largest_seed(seeds: list[Seed], i = 0):
 def save_specific_seed(seeds: list[Seed], n: int):
     chosen_seed  = seeds[n]
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
+    line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_+lines{arguments.output.suffix}")
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
+    transform.drawLines(chosen_path, 3, line_path, arguments.slope_min, arguments.slope_max)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     extract_pixel_coordinates(chosen_seed)
 
@@ -155,6 +160,8 @@ if __name__ == "__main__":
         min_pixels=arguments.min_pixels,
         saturation_threshold=arguments.saturation_threshold,
     )
+    print("found_seeds assigned")
     save_specific_seed(found_seeds, find_largest_seed(found_seeds))
+    print("its draw_seeds")
     draw_seeds(arguments.image, found_seeds, arguments.output)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
