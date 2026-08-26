@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import transform
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 from read_pixel_matrix import read_pixel_matrix
 
@@ -81,16 +81,19 @@ def _pop_component(candidates: set[tuple[int, int]]) -> set[tuple[int, int]]:
     return component
 
 
-def draw_seeds(image_path: Path, seeds: list[Seed], output_path: Path) -> None:
+def draw_seeds(image_path: Path, seeds: list[Seed], output_path: Path, number_seeds: bool = False) -> None:
     with Image.open(image_path) as image:
         annotated_image = image.convert("RGBA")
 
     overlay = Image.new("RGBA", annotated_image.size)
     overlay_draw = ImageDraw.Draw(overlay)
-    for seed in seeds:
+    font = ImageFont.load_default(15)
+    for i, seed in enumerate(seeds):
         for column, row in seed.pixels:
             overlay_draw.point((column, row), fill=(0, 255, 255, 255))
         overlay_draw.rectangle(seed.bounds, outline=(255, 0, 255, 255), width=1)
+        if number_seeds == True:
+         overlay_draw.text((seed.bounds[0], seed.bounds[1]), str(i), font=font, fill=(16, 255, 0, 255))
 
     Image.alpha_composite(annotated_image, overlay).save(output_path)
 
@@ -110,11 +113,14 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         default=project_root / "resources" / "ABCMO_294_detail_seeds.png",
     )
-    parser.add_argument("--slice-height", type=int, default=10)
+    parser.add_argument("--slice-height", type=int, default=10, help="The height of the slices the image is divided into")
     parser.add_argument("--min-pixels", type=int, default=5)
     parser.add_argument("--saturation-threshold", type=float, default=150)
-    parser.add_argument("--slope-min", type=float, default=0)
-    parser.add_argument("--slope-max", type=float, default=1)
+    parser.add_argument("--slope-min", type=float, default=0, help="The minimum amount of slope the transform will use")
+    parser.add_argument("--slope-max", type=float, default=1, help="The maximum amount of slope the transform will use")
+    parser.add_argument("--lines-amount", type=int, default=3, help="TEMPORARY UNTIL DYNAMIC IMPLEMENTATION! The amount of lines the transform will draw onto the seed")
+    parser.add_argument("--number-seeds", type=bool, default=False, help="Whether or not the seeds should be numbered in the image")
+    parser.add_argument("--analyze", type=int, default=None, help="The index of the seed you want to analyze")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -146,8 +152,10 @@ def save_specific_seed(seeds: list[Seed], n: int):
     chosen_seed  = seeds[n]
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
     line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_+lines{arguments.output.suffix}")
+    line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
-    transform.drawLines(chosen_path, 3, line_path, arguments.slope_min, arguments.slope_max)
+    transform.draw_pixel_lines(arguments.slope_min, arguments.slope_max, chosen_path, line_pixel_path)
+    transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.slope_min, arguments.slope_max)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     extract_pixel_coordinates(chosen_seed)
 
@@ -160,8 +168,8 @@ if __name__ == "__main__":
         min_pixels=arguments.min_pixels,
         saturation_threshold=arguments.saturation_threshold,
     )
-    print("found_seeds assigned")
-    save_specific_seed(found_seeds, find_largest_seed(found_seeds))
-    print("its draw_seeds")
-    draw_seeds(arguments.image, found_seeds, arguments.output)
+    if arguments.analyze is None:
+        arguments.analyze = find_largest_seed(found_seeds)
+    save_specific_seed(found_seeds, arguments.analyze)
+    draw_seeds(arguments.image, found_seeds, arguments.output, arguments.number_seeds)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")

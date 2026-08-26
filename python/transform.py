@@ -6,6 +6,7 @@ import itertools
 import Circle
 from PIL import Image, ImageDraw
 import numpy as np
+import colorsys
 
 Intersects = []
 def transform(x, y, m = 0):
@@ -17,6 +18,35 @@ def get_intersection_point(m0, m1, x1, y1, x2, y2):
     l2 = Line(Point(m0, transform(x2, y2, m0)), Point(m1, transform(x2, y2, m1)))
     intersection_point = l1.intersection(l2)
     return intersection_point
+
+def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixels.json"):
+    script_dir = Path(__file__).parent.parent
+    linesToDraw = []
+    target_path = script_dir / "resources" / file_name
+    with open(target_path, 'r') as file:
+        pixels = json.load(file)
+        for x in range(len(pixels)):
+            x1 = pixels[x][0]
+            y1 = pixels[x][1]
+            l = ((m0, transform(x1, y1, m0)), (m1, transform(x1, y1, m1)))
+            #l = Line(Point(m0, transform(x1, y1, m0)), Point(m1, transform(x1, y1, m1)))
+            linesToDraw.append(l)
+        #print(linesToDraw)
+        with Image.open(input_path) as image:
+            image_background = Image.new("RGBA", image.size, "white")
+        lines_overlay = Image.new("RGBA", image_background.size)
+        lines_draw = ImageDraw.Draw(lines_overlay)
+
+        for i in range(len(linesToDraw)):
+            hue = i / int(len(linesToDraw))
+            r, g, b = colorsys.hsv_to_rgb(hue, 1.0, 1.0)
+            color = (int(r * 255), int(g * 255), int (b * 255))
+            lines_draw.line([linesToDraw[i][0], linesToDraw[i][1]], fill=color,width=1)
+        Image.alpha_composite(image_background, lines_overlay).save(out_path)
+
+
+        
+    
 
 def intersect_available_lines_via_file(m0, m1, file_name = "pixels.json"):
     script_dir = Path(__file__).parent.parent
@@ -129,13 +159,10 @@ def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax):
     t = Symbol('t')
     for i in range(n):
         p1 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 0)
-        print("p1", p1)
         p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 100)
-        print("p2", p2)
         start = Circle.ConvertPoint2DtoTuple(p1)
         end = Circle.ConvertPoint2DtoTuple(p2)
         line_draw.line([start, end], fill="red", width=1)
-        print("Line done!")
     Image.alpha_composite(annotated_image, line).save(output_path)
 
-print(find_n_most_common_point(0))
+#print(find_n_most_common_points(5))
