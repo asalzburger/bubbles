@@ -4,6 +4,7 @@ from sympy import Point, Point2D, Line, evalf, Symbol
 from collections import Counter
 import itertools
 import Circle
+import sys
 from PIL import Image, ImageDraw
 import numpy as np
 import colorsys
@@ -67,7 +68,9 @@ def draw_chart(m0, m1, window_name = "Seed m/t chart", file_name = "pixels.json"
         plt.plot(x, y, marker="o")
     plt.show()
 
-
+def on_key(event):
+    if event.key in ('q', 'Q'):
+        plt.close('all')
 
 # histogram function for the hough transform
 def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step):
@@ -115,9 +118,13 @@ def intersect_available_lines_via_file(m0, m1, file_name = "pixels.json"):
 
         Intersects.extend(local_intersects)
 
-def intersect_available_lines_vectorized(m0, m1, file_name="pixels.json"): # this is the ai-optimised intersect_available_lines_via_file method
+def intersect_available_lines_vectorized(m0, m1, clear = False, file_name="pixels.json"): # this is the ai-optimised intersect_available_lines_via_file method
     script_dir = Path(__file__).parent.parent # this function runs a lot faster, but also uses more memory
     target_path = script_dir / "resources" / file_name
+
+    if clear:
+        Intersects.clear()
+        #print("Clearing Intersects!")
     
     with open(target_path, 'r') as file:
         pixels = np.array(json.load(file))
@@ -170,15 +177,15 @@ def find_most_common_point(m0 = 0, mmax = 1):
     return most_common_intersect
 
 # simple function to return a list of the nth most common points and their frequency
-def find_n_most_common_points(n, m0= 0, mmax = 1):
-    intersect_available_lines_vectorized(m0, mmax)
+def find_n_most_common_points(n, m0= 0, mmax = 1, clr = False):
+    intersect_available_lines_vectorized(m0, mmax, clr)
     counter = Counter(Intersects)
     n_most_common_intersects = counter.most_common(n)
     return n_most_common_intersects
 
 # function to return the nth most common point
-def find_n_most_common_point(n, m0= 0, mmax = 1):
-    intersect_available_lines_vectorized(m0, mmax)
+def find_n_most_common_point(n, m0= 0, mmax = 1, clr = False):
+    #intersect_available_lines_vectorized(m0, mmax, clr)
     counter = Counter(Intersects)
     if n < 0 or n >= len(counter):
         print("!WARNING! Intersect Index out of bounds")
@@ -193,12 +200,13 @@ def createLine(trf: Point2D):
     return Line(p, slope = m)
 
 # function to draw lines onto the seed
-def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax):
+def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax, clr):
     with Image.open(image_path) as image:
         annotated_image = image.convert("RGBA")
     common_Intersects = []
+    intersect_available_lines_vectorized(m0, mmax, clr)
     for x in range(n):
-        common_Intersects.append(find_n_most_common_point(x,m0,mmax))
+        common_Intersects.append(find_n_most_common_point(x,m0,mmax, clr))
     line = Image.new("RGBA", annotated_image.size)
     line_draw = ImageDraw.Draw(line)
     t = Symbol('t')
@@ -210,4 +218,4 @@ def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax):
         line_draw.line([start, end], fill="red", width=1)
     Image.alpha_composite(annotated_image, line).save(output_path)
 
-#print(find_n_most_common_points(5))
+#print(find_n_most_common_point(5))

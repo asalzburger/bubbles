@@ -123,6 +123,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--seed-index", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
     parser.add_argument("--no-chart", action="store_true", help="Turn of the m/t chart")
     parser.add_argument("--only-all", action="store_true", help="Saves only the seed overlay for all found seeds")
+    parser.add_argument("--clear-intersects", action="store_true", help="TEMPORARY, POSSIBLY DEPRECATED Clears the Intersects list in transform.py before recalculating it")
+    parser.add_argument("--print-intersects", type=int, help="Prints out Intersection points for the chosen seed")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -132,7 +134,7 @@ def extract_pixel_coordinates(Seed):
     script_dir = Path(__file__).parent.parent
     target_path = script_dir / folder_name / file_name
     with open(target_path, 'w') as f:
-            json.dump(pixel_coordinates, f, indent = 4)
+        json.dump(pixel_coordinates, f, indent = 4)
     
 
 def find_largest_seed(seeds: list[Seed], retcase = 0):
@@ -151,15 +153,22 @@ def find_largest_seed(seeds: list[Seed], retcase = 0):
             return(largest_seed, largest_seed_index)
 
 def save_specific_seed(seeds: list[Seed], n: int):
-    chosen_seed  = seeds[n]
+    if n < 0 or None:
+        raise ValueError("Seed index must be a positive or 0!")
+    chosen_seed  = seeds[int(n)]
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
     line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_transform_lines{arguments.output.suffix}")
     #line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
     #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
-    transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope)
+    transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     extract_pixel_coordinates(chosen_seed)
+    if arguments.print_intersects is not None:
+        if int(arguments.print_intersects) >= 0:
+            print("Intersection Points for this seed: ", transform.find_n_most_common_points(int(arguments.print_intersects), arguments.min_slope, arguments.max_slope, arguments.clear_intersects))
+        else:
+            raise ValueError("print-intersects must be positive or 0!")
     if not arguments.no_chart:
         transform.draw_chart(arguments.min_slope, arguments.max_slope, f"Seed {n} m/t chart")
 
@@ -175,7 +184,8 @@ if __name__ == "__main__":
     if arguments.seed_index is None:
         if not arguments.only_all:
             arguments.seed_index = find_largest_seed(found_seeds, 0)
-    if not arguments.only_all:
-        save_specific_seed(found_seeds, arguments.seed_index)
     draw_seeds(arguments.image, found_seeds, arguments.output, arguments.number_seeds)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
+    if not arguments.only_all:
+        save_specific_seed(found_seeds, arguments.seed_index)
+    print("Exiting chart...")
