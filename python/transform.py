@@ -50,7 +50,8 @@ def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixe
             lines_draw.line([linesToDraw[i][0], linesToDraw[i][1]], fill=color,width=1)
         Image.alpha_composite(image_background, lines_overlay).save(out_path)
 
-def draw_diagram(m0, m1, window_name = "Seed m/t diagram", file_name = "pixels.json"):
+# function to plot a chart of transformed lines to manually inspect intersections
+def draw_chart(m0, m1, window_name = "Seed m/t chart", file_name = "pixels.json"):
     script_dir = Path(__file__).parent.parent
     target_path = script_dir / "resources" / file_name
     with open(target_path, 'r') as file:

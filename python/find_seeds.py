@@ -119,8 +119,10 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--min-slope", type=float, default=0, help="The minimum amount of slope the transform will use")
     parser.add_argument("--max-slope", type=float, default=1, help="The maximum amount of slope the transform will use")
     parser.add_argument("--lines-amount", type=int, default=3, help="TEMPORARY UNTIL DYNAMIC IMPLEMENTATION! The amount of lines the transform will draw onto the seed")
-    parser.add_argument("--number-seeds", type=bool, default=False, help="Whether or not the seeds should be numbered in the image")
+    parser.add_argument("--number-seeds", action="store_true", help="Whether or not the seeds should be numbered in the image")
     parser.add_argument("--seed-index", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
+    parser.add_argument("--no-chart", action="store_true", help="Turn of the m/t chart")
+    parser.add_argument("--only-all", action="store_true", help="Saves only the seed overlay for all found seeds")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -152,13 +154,14 @@ def save_specific_seed(seeds: list[Seed], n: int):
     chosen_seed  = seeds[n]
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
     line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_transform_lines{arguments.output.suffix}")
-    line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
+    #line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
     #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
     transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     extract_pixel_coordinates(chosen_seed)
-    transform.draw_diagram(arguments.min_slope, arguments.max_slope, f"Seed {n} m/t diagram")
+    if not arguments.no_chart:
+        transform.draw_chart(arguments.min_slope, arguments.max_slope, f"Seed {n} m/t chart")
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -170,7 +173,9 @@ if __name__ == "__main__":
         saturation_threshold=arguments.saturation_threshold,
     )
     if arguments.seed_index is None:
-        arguments.seed_index = find_largest_seed(found_seeds, 0)
-    save_specific_seed(found_seeds, arguments.seed_index)
+        if not arguments.only_all:
+            arguments.seed_index = find_largest_seed(found_seeds, 0)
+    if not arguments.only_all:
+        save_specific_seed(found_seeds, arguments.seed_index)
     draw_seeds(arguments.image, found_seeds, arguments.output, arguments.number_seeds)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
