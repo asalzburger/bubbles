@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
-from sympy import Point, Point2D, Line, evalf, Symbol
+from sympy import Point, Point2D, Line, evalf, Symbol, Polygon, N, pi
 from collections import Counter
 import itertools
 import Circle
-import sys
+import find_seeds
 from PIL import Image, ImageDraw
 import numpy as np
 import colorsys
@@ -13,6 +13,7 @@ matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 
 Intersects = []
+SeedLines = []
 
 # simple transform function
 def transform(x, y, m = 0):
@@ -199,8 +200,12 @@ def createLine(trf: Point2D):
     m = trf.x.evalf()
     return Line(p, slope = m)
 
+def line_intersects_seed(line, seed: find_seeds.Seed) -> bool:
+    return any(line.contains(Point(c, r)) for c, r in seed.pixels)
+
 # function to draw lines onto the seed
 def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax, clr):
+    Lines = []
     with Image.open(image_path) as image:
         annotated_image = image.convert("RGBA")
     common_Intersects = []
@@ -215,7 +220,11 @@ def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax, clr):
         p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 100)
         start = Circle.ConvertPoint2DtoTuple(p1)
         end = Circle.ConvertPoint2DtoTuple(p2)
+        image_line = Line(Point(*start), Point(*end))
         line_draw.line([start, end], fill="red", width=1)
+        Lines.append(image_line)
+    SeedLines.append(Lines)
+    #print(Lines)
     Image.alpha_composite(annotated_image, line).save(output_path)
 
 #print(find_n_most_common_point(5))

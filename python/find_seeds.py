@@ -125,6 +125,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--only-all", action="store_true", help="Saves only the seed overlay for all found seeds")
     parser.add_argument("--clear-intersects", action="store_true", help="TEMPORARY, POSSIBLY DEPRECATED Clears the Intersects list in transform.py before recalculating it")
     parser.add_argument("--print-intersects", type=int, help="Prints out Intersection points for the chosen seed")
+    parser.add_argument("--no-lines", action="store_true", help="Disables line drawing")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -159,11 +160,12 @@ def save_specific_seed(seeds: list[Seed], n: int):
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
     line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_transform_lines{arguments.output.suffix}")
     #line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
+    extract_pixel_coordinates(chosen_seed)
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
     #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
-    transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects)
+    if not arguments.no_lines:
+        transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects)
     print(f"Saved overlay for seed {n} to {chosen_path}")
-    extract_pixel_coordinates(chosen_seed)
     if arguments.print_intersects is not None:
         if int(arguments.print_intersects) >= 0:
             print("Intersection Points for this seed: ", transform.find_n_most_common_points(int(arguments.print_intersects), arguments.min_slope, arguments.max_slope, arguments.clear_intersects))
@@ -171,6 +173,41 @@ def save_specific_seed(seeds: list[Seed], n: int):
             raise ValueError("print-intersects must be positive or 0!")
     if not arguments.no_chart:
         transform.draw_chart(arguments.min_slope, arguments.max_slope, f"Seed {n} m/t chart")
+
+def find_nearby_seeds(seeds: list[Seed], target_seed: Seed, distance_threshold: float) -> list[Seed]:
+    nearby_seeds = []
+    target_bounds = target_seed.bounds
+    target_center = ((target_bounds[0] + target_bounds[2]) / 2, (target_bounds[1] + target_bounds[3]) / 2)
+
+    for seed in seeds:
+        if seed == target_seed:
+            continue
+        seed_bounds = seed.bounds
+        seed_center = ((seed_bounds[0] + seed_bounds[2]) / 2, (seed_bounds[1] + seed_bounds[3]) / 2)
+        distance = ((target_center[0] - seed_center[0]) ** 2 + (target_center[1] - seed_center[1]) ** 2) ** 0.5
+        if distance <= distance_threshold:
+            nearby_seeds.append(seed)
+
+    return nearby_seeds
+
+def check_nearby_seeds_for_intersections(seeds: list[Seed], target_seed: Seed, distance_threshold: float):
+    nearby_seeds = find_nearby_seeds(seeds, target_seed, distance_threshold)
+    Intersecting_seeds = []
+    for i in range(len(nearby_seeds)):
+        for x in range(len(transform.SeedLines)):
+            if(transform.line_intersects_seed(transform.SeedLines[0][x], nearby_seeds[i])):
+                Intersecting_seeds.append(nearby_seeds[i])
+
+    return Intersecting_seeds
+
+def draw_intersecting_seeds(seeds: list[Seed], target_seed: Seed, distance_threshold: float): # unfinished
+    cluster_path = arguments.output.with_name(f"{arguments.output.stem}_seed_cluster_{arguments.output.suffix}")
+    seeds_to_draw = [target_seed]
+    seeds_to_draw.extend(check_nearby_seeds_for_intersections(seeds, target_seed, distance_threshold))
+    for i in range(len(seeds_to_draw)):
+        extract_pixel_coordinates(seeds_to_draw[i])
+    draw_seeds(arguments.image, seeds_to_draw, cluster_path)
+    transform.drawLines(cluster_path, arguments.lines_amount, cluster_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects)
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -188,4 +225,4 @@ if __name__ == "__main__":
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
     if not arguments.only_all:
         save_specific_seed(found_seeds, arguments.seed_index)
-    print("Exiting chart...")
+    #print(check_nearby_seeds_for_intersections(found_seeds, found_seeds[arguments.seed_index], 20))
