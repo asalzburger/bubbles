@@ -170,7 +170,7 @@ def save_specific_seed(seeds: list[Seed], n: int):
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
     #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
     if not arguments.no_lines:
-        transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length)
+        transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, chosen_seed)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     if arguments.print_intersects is not None:
         if int(arguments.print_intersects) >= 0:
@@ -214,7 +214,7 @@ def draw_intersecting_seeds(seeds: list[Seed], target_seed: Seed, distance_thres
     #print("Length:", len(seeds_to_draw))
     for i in range(len(seeds_to_draw)):
         extract_pixel_coordinates(seeds_to_draw[i])
-        transform.drawLines(cluster_path, arguments.lines_amount, cluster_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length)
+        transform.drawLines(cluster_path, arguments.lines_amount, cluster_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, seeds_to_draw[i])
 
 def find_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float):
     cluster = [target_seed]
@@ -249,7 +249,7 @@ def draw_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float
         transform.drawLines(
             cluster_path, arguments.lines_amount, cluster_path,
             arguments.min_slope, arguments.max_slope,
-            arguments.clear_intersects, arguments.length
+            arguments.clear_intersects, arguments.length, seed
         )
 
 if __name__ == "__main__":
@@ -269,3 +269,4 @@ if __name__ == "__main__":
     if not arguments.only_all:
         save_specific_seed(found_seeds, arguments.seed_index)
         draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
+        #print(transform.getLines(arguments.min_slope, arguments.max_slope, found_seeds[arguments.seed_index],3,arguments.clear_intersects,arguments.length))

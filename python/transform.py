@@ -95,7 +95,7 @@ def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step
 
 from sympy import Line2D, Point, oo
 
-def interpolate_lines(line1: Line2D, line2: Line2D, tol=0.1) -> Line2D | None:
+def interpolate_lines(line1: Line2D, line2: Line2D, tol=1e-9) -> Line2D | None:
     m1, m2 = line1.slope, line2.slope
 
     # Both vertical → "similar" means same x; interpolate x
@@ -197,6 +197,54 @@ def intersect_available_lines_vectorized(m0, m1, clear = False, file_name="pixel
     ])
     print(f"Created {len(Intersects)} intersection points.")
 
+def intersect_available_lines_vectorized_list(m0, m1, seed: find_seeds.Seed, clear = False):
+
+    if clear:
+        Intersects.clear()
+        #print("Clearing Intersects!")
+    
+    pixels = np.array(seed.pixels)
+
+    t0 = transform(pixels[:, 0], pixels[:, 1], m0) 
+    t1 = transform(pixels[:, 0], pixels[:, 1], m1)
+
+    m0_i = np.full((len(pixels), 1), m0)
+    m1_i = np.full((len(pixels), 1), m1)
+    t0_i = t0.reshape(-1, 1)
+    t1_i = t1.reshape(-1, 1)
+    
+    m0_j = m0_i.T
+    m1_j = m1_i.T
+    t0_j = t0_i.T
+    t1_j = t1_i.T
+
+    x1, y1 = m0_i, t0_i
+    x2, y2 = m1_i, t1_i
+    x3, y3 = m0_j, t0_j
+    x4, y4 = m1_j, t1_j
+
+    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    
+    denom_safe = np.where(denom == 0, np.nan, denom)
+
+    px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom_safe
+    
+    py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom_safe
+
+    i_indices, j_indices = np.tril_indices(len(pixels), k=-1)
+    
+    valid_px = px[i_indices, j_indices]
+    valid_py = py[i_indices, j_indices]
+    
+    mask = ~np.isnan(valid_px)
+    final_intersections = np.column_stack((valid_px[mask], valid_py[mask]))
+
+    Intersects.extend([
+        Point2D(x, y, evaluate=False) 
+        for x, y in final_intersections
+    ])
+    print(f"Created {len(Intersects)} intersection points.")
+
 # function to return the most common point
 def find_most_common_point(m0 = 0, mmax = 1):
     intersect_available_lines_via_file(m0, mmax)
@@ -230,31 +278,64 @@ def createLine(trf: Point2D):
     m = trf.x.evalf()
     return Line(p, slope = m)
 
+def getLines(m0, m1, seed: find_seeds.Seed,n: int, clear, length):
+    intersect_available_lines_vectorized_list(m0, m1, seed, clear)
+    Lines = []
+    common_Intersects = []
+    for x in range(n):
+            common_Intersects.append(find_n_most_common_point(x,m0,m1,clear))
+    t = Symbol('t')
+    for i in range(n):
+        p1 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 0)
+        p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, length)
+        start = Circle.ConvertPoint2DtoTuple(p1)
+        end = Circle.ConvertPoint2DtoTuple(p2)
+        image_line = Line(Point(*start), Point(*end))
+        Lines.append(image_line)
+    return Lines
+
 def line_intersects_seed(line, seed: find_seeds.Seed) -> bool:
     return any(line.contains(Point(c, r)) for c, r in seed.pixels)
 
 # function to draw lines onto the seed
-def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax, clr, length: int):
-    Lines = []
+# def drawLines(image_path: Path,n: int, output_path: Path, m0, mmax, clr, length: int, color="red"):
+#     Lines = []
+#     with Image.open(image_path) as image:
+#         annotated_image = image.convert("RGBA")
+#     common_Intersects = []
+#     intersect_available_lines_vectorized(m0, mmax, clr)
+#     for x in range(n):
+#         common_Intersects.append(find_n_most_common_point(x,m0,mmax, clr))
+#     if not Skip:
+#         line = Image.new("RGBA", annotated_image.size)
+#         line_draw = ImageDraw.Draw(line)
+#         t = Symbol('t')
+#         for i in range(n):
+#             p1 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 0)
+#             p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, length)
+#             start = Circle.ConvertPoint2DtoTuple(p1)
+#             end = Circle.ConvertPoint2DtoTuple(p2)
+#             image_line = Line(Point(*start), Point(*end))
+#             line_draw.line([start, end], fill=color, width=1)
+#             Lines.append(image_line)
+#         SeedLines.append(Lines)
+#         Image.alpha_composite(annotated_image, line).save(output_path)
+
+def drawLines(image_path: Path, n: int, output_path: Path, m0, mmax, clr, length: int, seed: find_seeds.Seed, color="red"):
+    Lines = getLines(m0, mmax, seed, n, clr, length)
+
     with Image.open(image_path) as image:
         annotated_image = image.convert("RGBA")
-    common_Intersects = []
-    intersect_available_lines_vectorized(m0, mmax, clr)
-    for x in range(n):
-        common_Intersects.append(find_n_most_common_point(x,m0,mmax, clr))
+
     if not Skip:
         line = Image.new("RGBA", annotated_image.size)
         line_draw = ImageDraw.Draw(line)
-        t = Symbol('t')
-        for i in range(n):
-            p1 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 0)
-            p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, length)
-            start = Circle.ConvertPoint2DtoTuple(p1)
-            end = Circle.ConvertPoint2DtoTuple(p2)
-            image_line = Line(Point(*start), Point(*end))
-            line_draw.line([start, end], fill="red", width=1)
-            Lines.append(image_line)
+        for image_line in Lines:
+            start = (image_line.p1.x, image_line.p1.y)
+            end   = (image_line.p2.x, image_line.p2.y)
+            line_draw.line([start, end], fill=color, width=1)
+
         SeedLines.append(Lines)
         Image.alpha_composite(annotated_image, line).save(output_path)
 
-#print(find_n_most_common_point(5))
+print(find_n_most_common_point(5))
