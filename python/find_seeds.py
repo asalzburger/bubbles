@@ -116,11 +116,11 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--slice-height", type=int, default=10, help="The height of the slices the image is divided into")
     parser.add_argument("--min-pixels", type=int, default=5)
     parser.add_argument("--saturation-threshold", type=float, default=150)
-    parser.add_argument("--slope-min", type=float, default=0, help="The minimum amount of slope the transform will use")
-    parser.add_argument("--slope-max", type=float, default=1, help="The maximum amount of slope the transform will use")
+    parser.add_argument("--min-slope", type=float, default=0, help="The minimum amount of slope the transform will use")
+    parser.add_argument("--max-slope", type=float, default=1, help="The maximum amount of slope the transform will use")
     parser.add_argument("--lines-amount", type=int, default=3, help="TEMPORARY UNTIL DYNAMIC IMPLEMENTATION! The amount of lines the transform will draw onto the seed")
     parser.add_argument("--number-seeds", type=bool, default=False, help="Whether or not the seeds should be numbered in the image")
-    parser.add_argument("--analyze", type=int, default=None, help="The index of the seed you want to analyze")
+    parser.add_argument("--seed-index", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -133,11 +133,11 @@ def extract_pixel_coordinates(Seed):
             json.dump(pixel_coordinates, f, indent = 4)
     
 
-def find_largest_seed(seeds: list[Seed], i = 0):
+def find_largest_seed(seeds: list[Seed], retcase = 0):
     largest_seed = max(seeds, key=lambda seed: len(seed.pixels))
     largest_seed_index = seeds.index(max(seeds, key=lambda seed: len(seed.pixels)))
     print(f"Found largest seed at index {largest_seed_index}")
-    match i:
+    match retcase:
         case 0:
             #print("Returning index of largest seed!", largest_seed_index)
             return(largest_seed_index)
@@ -151,13 +151,14 @@ def find_largest_seed(seeds: list[Seed], i = 0):
 def save_specific_seed(seeds: list[Seed], n: int):
     chosen_seed  = seeds[n]
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
-    line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_+lines{arguments.output.suffix}")
+    line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_transform_lines{arguments.output.suffix}")
     line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
-    transform.draw_pixel_lines(arguments.slope_min, arguments.slope_max, chosen_path, line_pixel_path)
-    transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.slope_min, arguments.slope_max)
+    #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
+    transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     extract_pixel_coordinates(chosen_seed)
+    transform.draw_diagram(arguments.min_slope, arguments.max_slope, f"Seed {n} m/t diagram")
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -168,8 +169,8 @@ if __name__ == "__main__":
         min_pixels=arguments.min_pixels,
         saturation_threshold=arguments.saturation_threshold,
     )
-    if arguments.analyze is None:
-        arguments.analyze = find_largest_seed(found_seeds)
-    save_specific_seed(found_seeds, arguments.analyze)
+    if arguments.seed_index is None:
+        arguments.seed_index = find_largest_seed(found_seeds, 0)
+    save_specific_seed(found_seeds, arguments.seed_index)
     draw_seeds(arguments.image, found_seeds, arguments.output, arguments.number_seeds)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")

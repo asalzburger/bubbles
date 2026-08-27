@@ -7,6 +7,9 @@ import Circle
 from PIL import Image, ImageDraw
 import numpy as np
 import colorsys
+import matplotlib
+matplotlib.use('TkAgg')
+import matplotlib.pyplot as plt
 
 Intersects = []
 
@@ -34,9 +37,7 @@ def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixe
             x1 = pixels[x][0]
             y1 = pixels[x][1]
             l = ((m0, transform(x1, y1, m0)), (m1, transform(x1, y1, m1)))
-            #l = Line(Point(m0, transform(x1, y1, m0)), Point(m1, transform(x1, y1, m1)))
             linesToDraw.append(l)
-        #print(linesToDraw)
         with Image.open(input_path) as image:
             image_background = Image.new("RGBA", image.size, "white")
         lines_overlay = Image.new("RGBA", image_background.size)
@@ -48,6 +49,24 @@ def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixe
             color = (int(r * 255), int(g * 255), int (b * 255))
             lines_draw.line([linesToDraw[i][0], linesToDraw[i][1]], fill=color,width=1)
         Image.alpha_composite(image_background, lines_overlay).save(out_path)
+
+def draw_diagram(m0, m1, window_name = "Seed m/t diagram", file_name = "pixels.json"):
+    script_dir = Path(__file__).parent.parent
+    target_path = script_dir / "resources" / file_name
+    with open(target_path, 'r') as file:
+        pixels = json.load(file)
+    plt.figure(window_name)
+    plt.xlabel('t (intercept)')
+    plt.ylabel('m (slope)')
+    for i in range(len(pixels)):
+        xa = pixels[i][0]
+        ya = pixels[i][1]
+        x = [m0, m1]
+        y = [transform(xa, ya, m0), transform(xa, ya, m1)]
+        plt.plot(x, y, marker="o")
+    plt.show()
+
+
 
 # histogram function for the hough transform
 def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step):
