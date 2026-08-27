@@ -2,6 +2,7 @@ import json
 import argparse
 import colorsys
 from collections.abc import Iterable
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 import transform
@@ -127,6 +128,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--print-intersects", type=int, help="Prints out Intersection points for the chosen seed")
     parser.add_argument("--no-lines", action="store_true", help="Disables line drawing")
     parser.add_argument("--length", type=int, default=100, help="Changes the length of the lines drawn")
+    parser.add_argument("--dist", type=float, default=20, help="The distance threshold of the clustering")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -139,20 +141,23 @@ def extract_pixel_coordinates(Seed):
         json.dump(pixel_coordinates, f, indent = 4)
     
 
-def find_largest_seed(seeds: list[Seed], retcase = 0):
+def find_largest_seed(seeds: list[Seed], retcase: int = 0):
     largest_seed = max(seeds, key=lambda seed: len(seed.pixels))
     largest_seed_index = seeds.index(max(seeds, key=lambda seed: len(seed.pixels)))
     print(f"Found largest seed at index {largest_seed_index}")
-    match retcase:
-        case 0:
-            #print("Returning index of largest seed!", largest_seed_index)
-            return(largest_seed_index)
-        case 1:
-            #print("Returning largest seed!", largest_index)
-            return(largest_seed)
-        case 2:
-            #print("Returning index and largest seed!", largest_seed_index, largest_seed)
-            return(largest_seed, largest_seed_index)
+    if retcase <= 3 and retcase >= 0:
+        match retcase:
+            case 0:
+                #print("Returning index of largest seed!", largest_seed_index)
+                return(largest_seed_index)
+            case 1:
+                #print("Returning largest seed!", largest_index)
+                return(largest_seed)
+            case 2:
+                #print("Returning index and largest seed!", largest_seed_index, largest_seed)
+                return(largest_seed, largest_seed_index)
+    else:
+        return(largest_seed_index)
 
 def save_specific_seed(seeds: list[Seed], n: int):
     if n < 0 or None:
@@ -211,9 +216,41 @@ def draw_intersecting_seeds(seeds: list[Seed], target_seed: Seed, distance_thres
         extract_pixel_coordinates(seeds_to_draw[i])
         transform.drawLines(cluster_path, arguments.lines_amount, cluster_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length)
 
-def start_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float):
-    draw_intersecting_seeds(seeds, target_seed, distance_threshold)
+def find_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float):
+    cluster = [target_seed]
+    visited = {id(target_seed)}
+    queue = deque([target_seed])
 
+    while queue:
+        current = queue.popleft()
+        nearby = find_nearby_seeds(seeds, current, distance_threshold)
+
+        for seed in nearby:
+            if id(seed) in visited:
+                continue
+            if any(transform.line_intersects_seed(transform.SeedLines[0][x], seed)
+                   for x in range(len(transform.SeedLines[0]))):
+                visited.add(id(seed))
+                cluster.append(seed)
+                queue.append(seed)
+
+    return cluster
+
+def draw_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float):
+    cluster = find_cluster(seeds, target_seed, distance_threshold)
+
+    cluster_path = arguments.output.with_name(
+        f"{arguments.output.stem}_cluster_{arguments.output.suffix}"
+    )
+    draw_seeds(arguments.image, cluster, cluster_path)
+
+    for seed in cluster:
+        extract_pixel_coordinates(seed)
+        transform.drawLines(
+            cluster_path, arguments.lines_amount, cluster_path,
+            arguments.min_slope, arguments.max_slope,
+            arguments.clear_intersects, arguments.length
+        )
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -231,4 +268,4 @@ if __name__ == "__main__":
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
     if not arguments.only_all:
         save_specific_seed(found_seeds, arguments.seed_index)
-        #draw_intersecting_seeds(found_seeds, found_seeds[arguments.seed_index], 200)
+        draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
