@@ -56,8 +56,8 @@ def draw_diagram(m0, m1, window_name = "Seed m/t diagram", file_name = "pixels.j
     with open(target_path, 'r') as file:
         pixels = json.load(file)
     plt.figure(window_name)
-    plt.xlabel('t (intercept)')
-    plt.ylabel('m (slope)')
+    plt.ylabel('t (intercept)')
+    plt.xlabel('m (slope)')
     for i in range(len(pixels)):
         xa = pixels[i][0]
         ya = pixels[i][1]
