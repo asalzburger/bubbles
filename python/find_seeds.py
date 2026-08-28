@@ -132,7 +132,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--slope-threshold", type=float, default=0.1, help="The maximum slope difference allowed when clustering seeds")
     parser.add_argument("--all","--a", action="store_true", help="Draws all seeds")
     parser.add_argument("--show-required","--sr","--rqr", action="store_true", help="Shows the required intersects to troubleshoot Intersects out of Bounds errors")
-    parser.add_argument("--cluster","--cl", action="store_true", help="Starts the clustering algorithm")
+    parser.add_argument("--cluster-one","--clo", action="store_true", help="Starts the clustering algorithm for one seed")
+    parser.add_argument("--cluster-all","--cla", action="store_true", help="Starts the clustering algorithm for all seeds")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -312,6 +313,108 @@ def draw_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float
     if unified_line is not None:
         transform.draw_line(cluster_path, cluster_path, unified_line, color="blue")
 
+
+def draw_clusters(seeds: list[Seed], distance_threshold: float) -> list:
+    lines_by_seed = {}
+
+    for seed in seeds:
+        lines = transform.getLines(
+            arguments.min_slope,
+            arguments.max_slope,
+            seed,
+            arguments.lines_amount,
+            True,
+            arguments.length or transform.dynamicLength(seed, 0.5),
+            arguments.show_required,
+        )
+        if lines:
+            lines_by_seed[seed] = lines
+
+    unassigned = set(seeds)
+    ordered_seeds = sorted(
+        seeds,
+        key=lambda seed: len(seed.pixels),
+        reverse=True,
+    )
+
+    all_path = arguments.output.with_name(
+        f"{arguments.output.stem}_clusters{arguments.output.suffix}"
+    )
+    draw_seeds(arguments.image, seeds, all_path)
+
+    cluster_lines = []
+    cluster_line_data = []
+    cluster_number = 0
+    for target_seed in ordered_seeds:
+        if target_seed not in unassigned:
+            continue
+
+        if target_seed not in lines_by_seed:
+            unassigned.remove(target_seed)
+            continue
+
+        cluster = find_cluster(
+            seeds,
+            target_seed,
+            lines_by_seed,
+            distance_threshold=distance_threshold,
+            slope_threshold=arguments.slope_threshold,
+            intercept_threshold=20,
+        )
+        cluster = [seed for seed in cluster if seed in lines_by_seed]
+        if not cluster:
+            continue
+
+        unassigned.difference_update(cluster)
+        for seed in cluster:
+            transform.drawLines(
+                all_path,
+                arguments.lines_amount,
+                all_path,
+                arguments.min_slope,
+                arguments.max_slope,
+                True,
+                arguments.length,
+                seed,
+                arguments.show_required,
+            )
+
+        unified_line = transform.line_for_cluster(cluster, lines_by_seed)
+        if unified_line is not None:
+            transform.draw_line(
+                all_path,
+                all_path,
+                unified_line,
+                color="blue",
+            )
+            cluster_lines.append(unified_line)
+            slope, intercept = transform.line_parameters(unified_line)
+            cluster_line_data.append(
+                {
+                    "cluster": cluster_number,
+                    "target_seed": seeds.index(target_seed),
+                    "seed_indices": [seeds.index(seed) for seed in cluster],
+                    "slope": slope,
+                    "intercept": intercept,
+                    "start": [float(unified_line.p1.x), float(unified_line.p1.y)],
+                    "end": [float(unified_line.p2.x), float(unified_line.p2.y)],
+                }
+            )
+
+        print(
+            f"Saved cluster {cluster_number} from seed "
+            f"{seeds.index(target_seed)} ({len(cluster)} seeds) to "
+            f"{all_path}"
+        )
+        cluster_number += 1
+
+    lines_path = all_path.with_suffix(".json")
+    with open(lines_path, "w") as file:
+        json.dump(cluster_line_data, file, indent=2)
+
+    print(f"Saved {len(cluster_lines)} unified cluster lines to {lines_path}")
+    return cluster_lines
+
 def draw_all_seeds(seeds: list[Seed]):
     all_path = arguments.output.with_name(f"{arguments.output.stem}_height_{arguments.slice_height}_all_seeds_{arguments.output.suffix}")
     draw_seeds(arguments.image, seeds, all_path)
@@ -339,8 +442,11 @@ if __name__ == "__main__":
     if not arguments.only_all:
         if not arguments.all:
             save_specific_seed(found_seeds, arguments.seed_index)
-            if arguments.cluster:
+            if arguments.cluster_one:
                 draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
+            elif arguments.cluster_all:
+                draw_clusters(found_seeds, arguments.dist)
+                transform.plot_lines(f"{arguments.output.stem}_clusters.json")
         else:
             draw_all_seeds(found_seeds)
         #print(transform.getLines(arguments.min_slope, arguments.max_slope, found_seeds[arguments.seed_index],3,arguments.clear_intersects,arguments.length))

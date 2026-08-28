@@ -70,6 +70,22 @@ def draw_chart(m0, m1, window_name = "Seed m/t chart", file_name = "pixels.json"
         plt.plot(x, y, marker="o")
     plt.show()
 
+def plot_lines(filename):
+    script_dir = Path(__file__).parent.parent
+    target_path = script_dir / "resources" / filename
+    fig, ax = plt.subplots()
+    fig.canvas.manager.set_window_title("Cluster Chart")
+    with open(target_path, "r") as f:
+        data = json.load(f)
+    for obj in data:
+        x1, y1 = obj["start"]
+        x2, y2 = obj["end"]
+        ax.plot([x1, x2], [y1, y2], label=f"Cluster around seed=s{obj['target_seed']}")
+    ax.legend()
+    ax.set_xlabel("x")
+    ax.set_ylabel("y")
+    plt.show()
+
 def on_key(event):
     if event.key in ('q', 'Q'):
         plt.close('all')
