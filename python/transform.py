@@ -333,7 +333,21 @@ def line_for_cluster(
     if not cluster_lines:
         return None
 
-    average_slope, average_intercept = average_line(cluster_lines)
+    reference_x = (
+        min(seed.bounds[0] for seed in cluster)
+        + max(seed.bounds[2] for seed in cluster)
+    ) / 2
+
+    points = [
+        (reference_x, float(line.slope) * reference_x + float(
+            line.p1.y - line.slope * line.p1.x
+        ))
+        for line in cluster_lines
+    ]
+
+    average_slope, _ = average_line(cluster_lines)
+    average_y = sum(y for _, y in points) / len(points)
+    average_intercept = average_y - average_slope * reference_x
 
     min_x = min(seed.bounds[0] for seed in cluster)
     max_x = max(seed.bounds[2] for seed in cluster)
@@ -343,13 +357,26 @@ def line_for_cluster(
 
     return Line(start, end)
 
-def getLines(m0, m1, seed: find_seeds.Seed, n: int, clear, length):
+
+def draw_line(image_path: Path, output_path: Path, line: Line, color="blue"):
+    with Image.open(image_path) as image:
+        annotated_image = image.convert("RGBA")
+
+    overlay = Image.new("RGBA", annotated_image.size)
+    overlay_draw = ImageDraw.Draw(overlay)
+    start = Circle.ConvertPoint2DtoTuple(line.p1)
+    end = Circle.ConvertPoint2DtoTuple(line.p2)
+    overlay_draw.line([start, end], fill=color, width=2)
+    Image.alpha_composite(annotated_image, overlay).save(output_path)
+
+def getLines(m0, m1, seed: find_seeds.Seed, n: int, clear, length, rqr):
     intersect_available_lines_vectorized_list(m0, m1, seed, clear)
-    print(
-        f"Intersects: {len(Intersects)}, "
-        f"unique: {len(Counter(Intersects))}, "
-        f"required: {n}"
-    )
+    if rqr:
+        print(
+            f"Intersects: {len(Intersects)}, "
+            f"unique: {len(Counter(Intersects))}, "
+            f"required: {n}"
+        )
     counter = Counter(Intersects)
     if len(counter) < n:
         print(f"Skipping seed: only {len(counter)} unique intersections found")
@@ -408,7 +435,7 @@ def line_intersects_seed(line, seed: find_seeds.Seed) -> bool:
 #         SeedLines.append(Lines)
 #         Image.alpha_composite(annotated_image, line).save(output_path)
 
-def drawLines(image_path: Path, n: int, output_path: Path, m0, mmax, clr, length: int, seed: find_seeds.Seed, color="red"):
+def drawLines(image_path: Path, n: int, output_path: Path, m0, mmax, clr, length: int, seed: find_seeds.Seed, rqr = bool, color="red"):
     #print("Skip: ", Skip)
     l: int
     if length is None:
@@ -416,7 +443,7 @@ def drawLines(image_path: Path, n: int, output_path: Path, m0, mmax, clr, length
     else:
         l = length
 
-    Lines = getLines(m0, mmax, seed, n, clr, l)
+    Lines = getLines(m0, mmax, seed, n, clr, l, rqr)
     if not Lines:
         print("Skipping seed...")
         return
