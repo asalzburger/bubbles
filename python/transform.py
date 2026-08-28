@@ -70,18 +70,25 @@ def draw_chart(m0, m1, window_name = "Seed m/t chart", file_name = "pixels.json"
         plt.plot(x, y, marker="o")
     plt.show()
 
-def plot_lines(filename):
+def plot_lines(filename, merge: bool, legend):
     script_dir = Path(__file__).parent.parent
     target_path = script_dir / "resources" / filename
     fig, ax = plt.subplots()
     fig.canvas.manager.set_window_title("Cluster Chart")
     with open(target_path, "r") as f:
         data = json.load(f)
-    for obj in data:
-        x1, y1 = obj["start"]
-        x2, y2 = obj["end"]
-        ax.plot([x1, x2], [y1, y2], label=f"Cluster around seed=s{obj['target_seed']}")
-    ax.legend()
+    merged = merge_segments(data, slope_tol=0.05, dist_tol=5.0)
+    if merge:
+        for i, obj in enumerate(merged):
+            ax.plot([obj["start"][0], obj["end"][0]],
+                    [obj["start"][1], obj["end"][1]], label=f"Merged Clusters {i}")
+    else:
+        for obj in data:
+            x1, y1 = obj["start"]
+            x2, y2 = obj["end"]
+            ax.plot([x1, x2], [y1, y2], label=f"Seed=s{obj['target_seed']}")
+    if legend:        
+        ax.legend()
     ax.set_xlabel("x")
     ax.set_ylabel("y")
     plt.show()
@@ -483,5 +490,76 @@ def dynamicLength(seed: find_seeds.Seed, f: float):
     l = math.hypot(max_col - min_col, max_row - min_row)
     l = l + l * f
     return int(l)
+
+import numpy as np
+from itertools import combinations
+
+def merge_segments(segments, slope_tol=0.05, dist_tol=5.0):
+    """
+    Merge line segments that have similar slopes and nearby endpoints.
+
+    Args:
+        segments:   list of dicts with 'start', 'end', 'slope'
+        slope_tol:  max |Δslope| for two segments to be mergeable
+        dist_tol:   max distance between any endpoint pair for merging
+
+    Returns:
+        list of merged segment dicts (same format)
+    """
+    n = len(segments)
+    parent = list(range(n))
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def union(a, b):
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    def endpoints_close(a, b):
+        for p in (a["start"], a["end"]):
+            for q in (b["start"], b["end"]):
+                if np.linalg.norm(np.array(p) - np.array(q)) < dist_tol:
+                    return True
+        return False
+
+    # Union compatible pairs
+    for i, j in combinations(range(n), 2):
+        if abs(segments[i]["slope"] - segments[j]["slope"]) < slope_tol:
+            if endpoints_close(segments[i], segments[j]):
+                union(i, j)
+
+    # Group indices by root
+    groups = {}
+    for i in range(n):
+        groups.setdefault(find(i), []).append(i)
+
+    # Build merged segments
+    merged = []
+    for indices in groups.values():
+        if len(indices) == 1:
+            merged.append(segments[indices[0]])
+            continue
+
+        all_pts = []
+        for idx in indices:
+            all_pts.append(np.array(segments[idx]["start"]))
+            all_pts.append(np.array(segments[idx]["end"]))
+
+        avg_slope = float(np.mean([segments[i]["slope"] for i in indices]))
+        start = all_pts[np.argmin([p[0] for p in all_pts])]
+        end   = all_pts[np.argmax([p[0] for p in all_pts])]
+
+        merged.append({
+            "start": start.tolist(),
+            "end":   end.tolist(),
+            "slope": avg_slope,
+        })
+
+    return merged   
 
 #print(find_n_most_common_point(5))

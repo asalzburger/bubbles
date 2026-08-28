@@ -134,6 +134,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--show-required","--sr","--rqr", action="store_true", help="Shows the required intersects to troubleshoot Intersects out of Bounds errors")
     parser.add_argument("--cluster-one","--clo", action="store_true", help="Starts the clustering algorithm for one seed")
     parser.add_argument("--cluster-all","--cla", action="store_true", help="Starts the clustering algorithm for all seeds")
+    parser.add_argument("--merge","--mrg", action="store_true", help="Merges the final lines when clustering")
+    parser.add_argument("--simulate","--sim", action="store_true", help="Easy access to the simulated.png returned from the simulator")
+    parser.add_argument("--legend","--leg", action="store_true", help="Shows the Legend for the clustering chart")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -427,6 +430,9 @@ def draw_all_seeds(seeds: list[Seed]):
 
 if __name__ == "__main__":
     arguments = parse_arguments()
+    if arguments.simulate:
+        arguments.image = Path("bubbles/resources/simulated.png")
+        arguments.output = Path("bubbles/resources/simulated_detail.png")
     matrix = read_pixel_matrix(arguments.image)
     found_seeds = find_seeds(
         matrix,
@@ -446,7 +452,7 @@ if __name__ == "__main__":
                 draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
             elif arguments.cluster_all:
                 draw_clusters(found_seeds, arguments.dist)
-                transform.plot_lines(f"{arguments.output.stem}_clusters.json")
+                transform.plot_lines(f"{arguments.output.stem}_clusters.json", arguments.merge, arguments.legend)
         else:
             draw_all_seeds(found_seeds)
         #print(transform.getLines(arguments.min_slope, arguments.max_slope, found_seeds[arguments.seed_index],3,arguments.clear_intersects,arguments.length))
