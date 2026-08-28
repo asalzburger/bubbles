@@ -114,21 +114,22 @@ def parse_arguments() -> argparse.Namespace:
         type=Path,
         default=project_root / "resources" / "ABCMO_294_detail_seeds.png",
     )
-    parser.add_argument("--slice-height", type=int, default=10, help="The height of the slices the image is divided into")
-    parser.add_argument("--min-pixels", type=int, default=5)
-    parser.add_argument("--saturation-threshold", type=float, default=150)
-    parser.add_argument("--min-slope", type=float, default=0, help="The minimum amount of slope the transform will use")
-    parser.add_argument("--max-slope", type=float, default=1, help="The maximum amount of slope the transform will use")
-    parser.add_argument("--lines-amount", type=int, default=3, help="TEMPORARY UNTIL DYNAMIC IMPLEMENTATION! The amount of lines the transform will draw onto the seed")
-    parser.add_argument("--number-seeds", action="store_true", help="Whether or not the seeds should be numbered in the image")
-    parser.add_argument("--seed-index", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
-    parser.add_argument("--chart", action="store_true", help="Turn on the m/t chart")
-    parser.add_argument("--only-all", action="store_true", help="Saves only the seed overlay for all found seeds")
-    parser.add_argument("--clear-intersects", action="store_false", help="Stops clearing the Intersects list in transform.py before recalculating it")
-    parser.add_argument("--print-intersects", type=int, help="Prints out Intersection points for the chosen seed")
-    parser.add_argument("--no-lines", action="store_true", help="Disables line drawing")
-    parser.add_argument("--length", type=int, default=100, help="Changes the length of the lines drawn")
-    parser.add_argument("--dist", type=float, default=20, help="The distance threshold of the clustering")
+    parser.add_argument("--slice-height", "--sh", type=int, default=10, help="The height of the slices the image is divided into")
+    parser.add_argument("--min-pixels", "--mp", type=int, default=5, help="The minimum amount of pixels required for the seed calculation")
+    parser.add_argument("--saturation-threshold", "--st", type=float, default=150, help="The Threshold for saturation for the seed calculation")
+    parser.add_argument("--min-slope", "--mns","--smn","--slope-min", type=float, default=0, help="The minimum amount of slope the transform will use")
+    parser.add_argument("--max-slope", "--mxs","--smx","--slope-max", type=float, default=1, help="The maximum amount of slope the transform will use")
+    parser.add_argument("--lines-amount", "--la", type=int, default=3, help="TEMPORARY UNTIL DYNAMIC IMPLEMENTATION! The amount of lines the transform will draw onto the seed")
+    parser.add_argument("--number-seeds", "--ns","--num", action="store_true", help="Whether or not the seeds should be numbered in the image")
+    parser.add_argument("--seed-index","--idx","--seed", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
+    parser.add_argument("--chart","--c", action="store_true", help="Turn on the m/t chart")
+    parser.add_argument("--only-all","--oa", action="store_true", help="Saves only the seed overlay for all found seeds")
+    parser.add_argument("--clear-intersects","--ci", action="store_false", help="Stops clearing the Intersects list in transform.py before recalculating it")
+    parser.add_argument("--print-intersects","--pi", type=int, help="Prints out Intersection points for the chosen seed")
+    parser.add_argument("--no-lines","--nl", action="store_true", help="Disables line drawing")
+    parser.add_argument("--length", type=int, default=None, help="Changes the length of the lines drawn")
+    parser.add_argument("--dist","--distance","--dt", "--distance-threshold", type=float, default=20, help="The distance threshold of the clustering")
+    parser.add_argument("--all","--a", action="store_true", help="Draws all seeds")
     return parser.parse_args()
 
 def extract_pixel_coordinates(Seed):
@@ -161,12 +162,12 @@ def find_largest_seed(seeds: list[Seed], retcase: int = 0):
 
 def save_specific_seed(seeds: list[Seed], n: int):
     if n < 0 or None:
-        raise ValueError("Seed index must be a positive or 0!")
+        raise ValueError("Seed index must be positive or 0!")
     chosen_seed  = seeds[int(n)]
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_{arguments.output.suffix}")
     line_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_transform_lines{arguments.output.suffix}")
     #line_pixel_path = arguments.output.with_name(f"{arguments.output.stem}_seed_{n}_line_diagram_{arguments.output.suffix}")
-    extract_pixel_coordinates(chosen_seed)
+    #extract_pixel_coordinates(chosen_seed)
     draw_seeds(arguments.image, [chosen_seed], chosen_path)
     #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
     if not arguments.no_lines:
@@ -213,7 +214,7 @@ def draw_intersecting_seeds(seeds: list[Seed], target_seed: Seed, distance_thres
     draw_seeds(arguments.image, seeds_to_draw, cluster_path)
     #print("Length:", len(seeds_to_draw))
     for i in range(len(seeds_to_draw)):
-        extract_pixel_coordinates(seeds_to_draw[i])
+        #extract_pixel_coordinates(seeds_to_draw[i])
         transform.drawLines(cluster_path, arguments.lines_amount, cluster_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, seeds_to_draw[i])
 
 def find_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float):
@@ -245,12 +246,22 @@ def draw_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float
     draw_seeds(arguments.image, cluster, cluster_path)
 
     for seed in cluster:
-        extract_pixel_coordinates(seed)
+        #extract_pixel_coordinates(seed)
         transform.drawLines(
             cluster_path, arguments.lines_amount, cluster_path,
             arguments.min_slope, arguments.max_slope,
             arguments.clear_intersects, arguments.length, seed
         )
+
+def draw_all_seeds(seeds: list[Seed]):
+    all_path = arguments.output.with_name(f"{arguments.output.stem}_height_{arguments.slice_height}_all_seeds_{arguments.output.suffix}")
+    draw_seeds(arguments.image, seeds, all_path)
+    if not arguments.no_lines:
+        for x in range(len(seeds)):
+            print(f"Drawing seed {x}")
+            transform.drawLines(all_path, arguments.lines_amount, all_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, seeds[x])
+            print(f"Finished drawing seed {x}")
+        print(f"Saved overlay for all seeds to {all_path}")
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -267,6 +278,9 @@ if __name__ == "__main__":
     draw_seeds(arguments.image, found_seeds, arguments.output, arguments.number_seeds)
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
     if not arguments.only_all:
-        save_specific_seed(found_seeds, arguments.seed_index)
-        draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
+        if not arguments.all:
+            save_specific_seed(found_seeds, arguments.seed_index)
+            draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
+        else:
+            draw_all_seeds(found_seeds)
         #print(transform.getLines(arguments.min_slope, arguments.max_slope, found_seeds[arguments.seed_index],3,arguments.clear_intersects,arguments.length))

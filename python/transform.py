@@ -11,10 +11,10 @@ import colorsys
 import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
+import math
 
 Intersects = []
 SeedLines = []
-Skip = False
 
 # simple transform function
 def transform(x, y, m = 0):
@@ -146,7 +146,7 @@ def intersect_available_lines_via_file(m0, m1, file_name = "pixels.json"):
 
         Intersects.extend(local_intersects)
 
-def intersect_available_lines_vectorized(m0, m1, clear = False, file_name="pixels.json"): # this is the ai-optimised intersect_available_lines_via_file method
+def intersect_available_lines_vectorized(m0, m1, clear = True, file_name="pixels.json"): # this is the ai-optimised intersect_available_lines_via_file method
     script_dir = Path(__file__).parent.parent # this function runs a lot faster, but also uses more memory
     target_path = script_dir / "resources" / file_name
 
@@ -197,7 +197,10 @@ def intersect_available_lines_vectorized(m0, m1, clear = False, file_name="pixel
     ])
     print(f"Created {len(Intersects)} intersection points.")
 
-def intersect_available_lines_vectorized_list(m0, m1, seed: find_seeds.Seed, clear = False):
+def intersect_available_lines_vectorized_list(m0, m1, seed: find_seeds.Seed, clear = True):
+
+    global Skip
+    Skip = False
 
     if clear:
         Intersects.clear()
@@ -243,7 +246,11 @@ def intersect_available_lines_vectorized_list(m0, m1, seed: find_seeds.Seed, cle
         Point2D(x, y, evaluate=False) 
         for x, y in final_intersections
     ])
-    print(f"Created {len(Intersects)} intersection points.")
+    if len(Intersects) == 0:
+        Skip = True
+        print("No intersection points found!")
+    else:
+        print(f"Created {len(Intersects)} intersection points.")
 
 # function to return the most common point
 def find_most_common_point(m0 = 0, mmax = 1):
@@ -261,6 +268,7 @@ def find_n_most_common_points(n, m0= 0, mmax = 1, clr = False):
 
 # function to return the nth most common point
 def find_n_most_common_point(n, m0= 0, mmax = 1, clr = False):
+    global Skip
     #intersect_available_lines_vectorized(m0, mmax, clr)
     counter = Counter(Intersects)
     if n < 0 or n >= len(counter):
@@ -274,25 +282,104 @@ def find_n_most_common_point(n, m0= 0, mmax = 1, clr = False):
 
 # function to create a line from a point where (x|y) is (m|t)
 def createLine(trf: Point2D):
+    #print("Skip in createLine():", Skip)
+    if not Intersects:
+        return None
     p = Point(0, trf.y.evalf())
     m = trf.x.evalf()
     return Line(p, slope = m)
 
-def getLines(m0, m1, seed: find_seeds.Seed,n: int, clear, length):
+# def getLines(m0, m1, seed: find_seeds.Seed,n: int, clear, length):
+#     intersect_available_lines_vectorized_list(m0, m1, seed, clear)
+#     Lines = []
+#     common_Intersects = []
+#     #("Skip in getLines()", Skip)
+#     if not Skip:
+#         for x in range(n):
+#             common_Intersects.append(find_n_most_common_point(x,m0,m1,clear))
+#         t = Symbol('t')
+#         for i in range(n):
+#             p1 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 0)
+#             p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, length)
+#             start = Circle.ConvertPoint2DtoTuple(p1)
+#             end = Circle.ConvertPoint2DtoTuple(p2)
+#             image_line = Line(Point(*start), Point(*end))
+#             Lines.append(image_line)
+#         return Lines
+
+def line_parameters(line: Line) -> tuple[float, float]:
+    slope = float(line.slope)
+    intercept = float(line.p1.y - line.slope * line.p1.x)
+    return slope, intercept
+
+
+def average_line(lines: list[Line]) -> tuple[float, float]:
+    parameters = [line_parameters(line) for line in lines]
+    average_slope = sum(slope for slope, _ in parameters) / len(parameters)
+    average_intercept = sum(intercept for _, intercept in parameters) / len(parameters)
+    return average_slope, average_intercept
+
+
+def line_for_cluster(
+    cluster: list[find_seeds.Seed],
+    lines_by_seed: dict[find_seeds.Seed, list[Line]],
+) -> Line | None:
+    cluster_lines = [
+        line
+        for seed in cluster
+        for line in lines_by_seed.get(seed, [])
+    ]
+
+    if not cluster_lines:
+        return None
+
+    average_slope, average_intercept = average_line(cluster_lines)
+
+    min_x = min(seed.bounds[0] for seed in cluster)
+    max_x = max(seed.bounds[2] for seed in cluster)
+
+    start = Point(min_x, average_slope * min_x + average_intercept)
+    end = Point(max_x, average_slope * max_x + average_intercept)
+
+    return Line(start, end)
+
+def getLines(m0, m1, seed: find_seeds.Seed, n: int, clear, length):
     intersect_available_lines_vectorized_list(m0, m1, seed, clear)
-    Lines = []
-    common_Intersects = []
-    for x in range(n):
-            common_Intersects.append(find_n_most_common_point(x,m0,m1,clear))
-    t = Symbol('t')
-    for i in range(n):
-        p1 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, 0)
-        p2 = createLine(common_Intersects[i]).arbitrary_point(t).subs(t, length)
+    print(
+        f"Intersects: {len(Intersects)}, "
+        f"unique: {len(Counter(Intersects))}, "
+        f"required: {n}"
+    )
+    counter = Counter(Intersects)
+    if len(counter) < n:
+        print(f"Skipping seed: only {len(counter)} unique intersections found")
+        return None
+
+    common_intersects = [
+        counter.most_common(n)[index][0]
+        for index in range(n)
+    ]
+
+    lines = []
+    t = Symbol("t")
+
+    min_col, _, max_col, _ = seed.bounds
+    seed_center_x = (min_col + max_col) / 2
+
+    x_start = seed_center_x - length / 2
+    x_end = seed_center_x + length / 2
+
+    for intersection in common_intersects:
+        line = createLine(intersection)
+
+        p1 = line.arbitrary_point(t).subs(t, x_start)
+        p2 = line.arbitrary_point(t).subs(t, x_end)
+
         start = Circle.ConvertPoint2DtoTuple(p1)
         end = Circle.ConvertPoint2DtoTuple(p2)
-        image_line = Line(Point(*start), Point(*end))
-        Lines.append(image_line)
-    return Lines
+        lines.append(Line(Point(*start), Point(*end)))
+
+    return lines
 
 def line_intersects_seed(line, seed: find_seeds.Seed) -> bool:
     return any(line.contains(Point(c, r)) for c, r in seed.pixels)
@@ -322,7 +409,17 @@ def line_intersects_seed(line, seed: find_seeds.Seed) -> bool:
 #         Image.alpha_composite(annotated_image, line).save(output_path)
 
 def drawLines(image_path: Path, n: int, output_path: Path, m0, mmax, clr, length: int, seed: find_seeds.Seed, color="red"):
-    Lines = getLines(m0, mmax, seed, n, clr, length)
+    #print("Skip: ", Skip)
+    l: int
+    if length is None:
+        l = dynamicLength(seed, 0.5)
+    else:
+        l = length
+
+    Lines = getLines(m0, mmax, seed, n, clr, l)
+    if not Lines:
+        print("Skipping seed...")
+        return
 
     with Image.open(image_path) as image:
         annotated_image = image.convert("RGBA")
@@ -338,4 +435,10 @@ def drawLines(image_path: Path, n: int, output_path: Path, m0, mmax, clr, length
         SeedLines.append(Lines)
         Image.alpha_composite(annotated_image, line).save(output_path)
 
-print(find_n_most_common_point(5))
+def dynamicLength(seed: find_seeds.Seed, f: float):
+    min_col, min_row, max_col, max_row = seed.bounds
+    l = math.hypot(max_col - min_col, max_row - min_row)
+    l = l + l * f
+    return int(l)
+
+#print(find_n_most_common_point(5))
