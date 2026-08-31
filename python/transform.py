@@ -107,6 +107,35 @@ def on_key(event):
     if event.key in ('q', 'Q'):
         plt.close('all')
 
+def plot_intersection_points(m0, m1, clr,seeds: list[find_seeds.Seed], mltp: int, window_name = "Intersection points m/t chart", n: int = 5, leg: bool = False):
+    plt.figure(window_name)
+    plt.ylabel('t (intercept)')
+    plt.xlabel('m (slope)')
+
+    if mltp != 0:
+        for d in range(len(seeds)):
+            intersection_points = intersect_available_lines_vectorized_list(m0, m1, seeds[d], clr)
+            r = random.random()
+            g = random.random()
+            b = random.random()
+            colorp = (r, g, b)
+            for i in range(n):
+                ix = find_n_most_common_point_via_list(i, intersection_points)
+                m = ix[0].x
+                t = ix[0].y
+                plt.scatter(x=m,y=t,s=float(ix[1]),color=colorp, label=ix[0])
+    else:
+        intersection_points = intersect_available_lines_vectorized_list(m0, m1, seeds[0], clr)
+        for i in range(n):
+            ix = find_n_most_common_point_via_list(i, intersection_points)
+            m = ix[0].x
+            t = ix[0].y
+            plt.scatter(x=m,y=t,s=float(ix[1]), label=ix[0])
+    if leg:
+        plt.legend()
+    plt.show()
+
+
 # histogram function for the hough transform
 def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step):
     m_values = np.arange(m_min, m_max, m_step)
@@ -284,6 +313,7 @@ def intersect_available_lines_vectorized_list(m0, m1, seed: find_seeds.Seed, cle
         print("No intersection points found!")
     else:
         print(f"Created {len(Intersects)} intersection points.")
+        return Intersects
 
 # function to return the most common point
 def find_most_common_point(m0 = 0, mmax = 1):
@@ -311,6 +341,19 @@ def find_n_most_common_point(n, m0= 0, mmax = 1, clr = False):
     else:
         Skip = False
     n_most_common_intersects = counter.most_common(n + 1)[n][0]
+    return n_most_common_intersects
+
+def find_n_most_common_point_via_list(n, pts):
+    global Skip
+    #intersect_available_lines_vectorized(m0, mmax, clr)
+    counter = Counter(pts)
+    if n < 0 or n >= len(counter):
+        print("!WARNING! Intersect Index out of bounds")
+        Skip = True
+        return None
+    else:
+        Skip = False
+    n_most_common_intersects = counter.most_common(n + 1)[n]
     return n_most_common_intersects
 
 # function to create a line from a point where (x|y) is (m|t)
@@ -570,6 +613,4 @@ def merge_segments(segments, slope_tol=0.05, dist_tol=5.0):
             "slope": avg_slope,
         })
 
-    return merged   
-
-#print(find_n_most_common_point(5))
+    return merged

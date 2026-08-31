@@ -124,6 +124,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--seed-index","--idx","--seed", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
     parser.add_argument("--seed-indices","--idc","--seeds", type=tuple_type, default=None, help="Multiple indices of the seeds you want to analyze.")
     parser.add_argument("--chart","--ch", action="store_true", help="Turn on the m/t chart")
+    parser.add_argument("--chart-intersects","--chi", type=int, default=0, help="Charts the intersection points for the given seeds")
     parser.add_argument("--only-all","--oa", action="store_true", help="Saves only the seed overlay for all found seeds")
     parser.add_argument("--clear-intersects","--ci", action="store_false", help="Stops clearing the Intersects list in transform.py before recalculating it")
     parser.add_argument("--print-intersects","--pi", type=int, help="Prints out Intersection points for the chosen seed")
@@ -180,6 +181,8 @@ def save_specific_seed(seeds: list[Seed], n: int):
     #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
     if not arguments.no_lines:
         transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, chosen_seed, arguments.show_required)
+    if arguments.chart_intersects != 0:
+        transform.plot_intersection_points(arguments.min_slope, arguments.max_slope, arguments.clear_intersects, [chosen_seed], 0, n=arguments.chart_intersects, leg=arguments.legend)
     print(f"Saved overlay for seed {n} to {chosen_path}")
     if arguments.print_intersects is not None:
         if int(arguments.print_intersects) >= 0:
@@ -203,9 +206,12 @@ def save_multiple_seeds(seeds: list[Seed], n: tuple):
     chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seeds_{n}_{arguments.output.suffix}")
     line_path = arguments.output.with_name(f"{arguments.output.stem}_seeds_{n}_transform_lines{arguments.output.suffix}")
     draw_seeds(arguments.image, cseeds, chosen_path)
-    #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
-    # if not arguments.no_lines:
-    #     transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, chosen_seed, arguments.show_required)
+    if arguments.chart_intersects != 0:
+        transform.plot_intersection_points(arguments.min_slope, arguments.max_slope, arguments.clear_intersects, cseeds, arguments.seed_indices, n=arguments.chart_intersects, leg=arguments.legend)
+    if not arguments.no_lines:
+        transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, cseeds[0], arguments.show_required)
+        for a in range(1, len(cseeds)):
+            transform.drawLines(line_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, cseeds[a], arguments.show_required)
     print(f"Saved overlay for seeds {n} to {chosen_path}")
     if arguments.print_intersects is not None:
         if int(arguments.print_intersects) >= 0:
