@@ -126,7 +126,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--chart","--ch", action="store_true", help="Turn on the m/t chart")
     parser.add_argument("--chart-intersects","--chi", type=int, default=0, help="Charts the intersection points for the given seeds")
     parser.add_argument("--only-all","--oa", action="store_true", help="Saves only the seed overlay for all found seeds")
-    parser.add_argument("--clear-intersects","--ci", action="store_false", help="Stops clearing the Intersects list in transform.py before recalculating it")
+    parser.add_argument("--clear-intersects","--ci", action="store_false", help="DEPRECATED Stops clearing the Intersects list in transform.py before recalculating it")
     parser.add_argument("--print-intersects","--pi", type=int, help="Prints out Intersection points for the chosen seed")
     parser.add_argument("--no-lines","--nl", action="store_true", help="Disables line drawing")
     parser.add_argument("--length", type=int, default=None, help="Changes the length of the lines drawn")
@@ -141,6 +141,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--legend","--leg", action="store_true", help="Shows the Legend for the clustering chart")
     return parser.parse_args()
 
+# POSSIBLY DEPRECATED
 def extract_pixel_coordinates(Seed):
     folder_name = "resources"
     file_name = "pixels.json"
@@ -344,6 +345,9 @@ def draw_cluster(seeds: list[Seed], target_seed: Seed, distance_threshold: float
             arguments.min_slope, arguments.max_slope,
             arguments.clear_intersects, arguments.length, seed, arguments.show_required
         )
+
+    if arguments.chart_intersects:
+        transform.plot_intersection_points(arguments.min_slope, arguments.max_slope, arguments.clear_intersects, cluster, len(cluster), n=arguments.chart_intersects,leg=arguments.legend)
 
     unified_line = transform.line_for_cluster(cluster, lines_by_seed)
     if unified_line is not None:

@@ -23,14 +23,14 @@ def transform(x, y, m = 0):
 
     return t
 
-# function to calculate the intersection point
+# DEPRECATED function to calculate the intersection point
 def get_intersection_point(m0, m1, x1, y1, x2, y2):
     l1 = Line(Point(m0, transform(x1, y1, m0)), Point(m1, transform(x1, y1, m1)))
     l2 = Line(Point(m0, transform(x2, y2, m0)), Point(m1, transform(x2, y2, m1)))
     intersection_point = l1.intersection(l2)
     return intersection_point
 
-# function to draw lines in a diagram to manually show intersection points
+# DEPRECATED function to draw lines in a diagram to manually show intersection points
 def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixels.json"):
     script_dir = Path(__file__).parent.parent
     linesToDraw = []
@@ -103,6 +103,7 @@ def plot_lines(filename, merge: bool, legend):
     ax.set_ylabel("y")
     plt.show()
 
+# DEPRECATED
 def on_key(event):
     if event.key in ('q', 'Q'):
         plt.close('all')
@@ -136,7 +137,7 @@ def plot_intersection_points(m0, m1, clr,seeds: list[find_seeds.Seed], mltp: int
     plt.show()
 
 
-# histogram function for the hough transform
+# DEPRECATED / UNUSED histogram function for the hough transform
 def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step):
     m_values = np.arange(m_min, m_max, m_step)
     t_values = np.arange(t_min, t_max, t_step)
@@ -181,7 +182,7 @@ def interpolate_lines(line1: Line2D, line2: Line2D, tol=1e-9) -> Line2D | None:
 
     return Line2D(Point(0, b), slope=m)
     
-# generate intersection points from a file
+# DEPRECATED generate intersection points from a file
 def intersect_available_lines_via_file(m0, m1, file_name = "pixels.json"):
     script_dir = Path(__file__).parent.parent
     target_path = script_dir / "resources" / file_name
@@ -208,6 +209,7 @@ def intersect_available_lines_via_file(m0, m1, file_name = "pixels.json"):
 
         Intersects.extend(local_intersects)
 
+# DEPRECATED
 def intersect_available_lines_vectorized(m0, m1, clear = True, file_name="pixels.json"): # this is the ai-optimised intersect_available_lines_via_file method
     script_dir = Path(__file__).parent.parent # this function runs a lot faster, but also uses more memory
     target_path = script_dir / "resources" / file_name
@@ -315,7 +317,7 @@ def intersect_available_lines_vectorized_list(m0, m1, seed: find_seeds.Seed, cle
         print(f"Created {len(Intersects)} intersection points.")
         return Intersects
 
-# function to return the most common point
+# DEPRECATED function to return the most common point
 def find_most_common_point(m0 = 0, mmax = 1):
     intersect_available_lines_via_file(m0, mmax)
     counter = Counter(Intersects)
@@ -329,7 +331,7 @@ def find_n_most_common_points(n, seed, m0= 0, mmax = 1, clr = False):
     n_most_common_intersects = counter.most_common(n)
     return n_most_common_intersects
 
-# function to return the nth most common point
+# POSSIBLY DEPRECATED function to return the nth most common point
 def find_n_most_common_point(n, m0= 0, mmax = 1, clr = False):
     global Skip
     #intersect_available_lines_vectorized(m0, mmax, clr)
@@ -544,9 +546,6 @@ def dynamicLength(seed: find_seeds.Seed, f: float):
     l = l + l * f
     return int(l)
 
-import numpy as np
-from itertools import combinations
-
 def merge_segments(segments, slope_tol=0.05, dist_tol=5.0):
     """
     Merge line segments that have similar slopes and nearby endpoints.
@@ -581,7 +580,7 @@ def merge_segments(segments, slope_tol=0.05, dist_tol=5.0):
         return False
 
     # Union compatible pairs
-    for i, j in combinations(range(n), 2):
+    for i, j in itertools.combinations(range(n), 2):
         if abs(segments[i]["slope"] - segments[j]["slope"]) < slope_tol:
             if endpoints_close(segments[i], segments[j]):
                 union(i, j)
