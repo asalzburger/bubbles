@@ -12,6 +12,7 @@ import matplotlib
 matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 import math
+import random
 
 Intersects = []
 SeedLines = []
@@ -54,20 +55,29 @@ def draw_pixel_lines(m0, m1, input_path: Path, out_path: Path, file_name = "pixe
         Image.alpha_composite(image_background, lines_overlay).save(out_path)
 
 # function to plot a chart of transformed lines to manually inspect intersections
-def draw_chart(m0, m1, window_name = "Seed m/t chart", file_name = "pixels.json"):
-    script_dir = Path(__file__).parent.parent
-    target_path = script_dir / "resources" / file_name
-    with open(target_path, 'r') as file:
-        pixels = json.load(file)
+def draw_chart(m0, m1, seeds, mltp, window_name = "Seed m/t chart"):
+    # script_dir = Path(__file__).parent.parent
+    # target_path = script_dir / "resources" / file_name
+    # with open(target_path, 'r') as file:
+    #     pixels = json.load(file)
     plt.figure(window_name)
     plt.ylabel('t (intercept)')
     plt.xlabel('m (slope)')
-    for i in range(len(pixels)):
-        xa = pixels[i][0]
-        ya = pixels[i][1]
-        x = [m0, m1]
-        y = [transform(xa, ya, m0), transform(xa, ya, m1)]
-        plt.plot(x, y, marker="o")
+    for i in range(len(seeds)):
+        pixelsa = seeds[i].pixels
+        r = random.random()
+        g = random.random()
+        b = random.random()
+        colorl = (r, g, b)
+        for i in range(len(pixelsa)):
+            xa = pixelsa[i][0]
+            ya = pixelsa[i][1]
+            x = [m0, m1]
+            y = [transform(xa, ya, m0), transform(xa, ya, m1)]
+            if mltp:
+                plt.plot(x, y, marker="o", color=colorl)
+            else:
+                plt.plot(x, y, marker="o")
     plt.show()
 
 def plot_lines(filename, merge: bool, legend):
@@ -283,8 +293,8 @@ def find_most_common_point(m0 = 0, mmax = 1):
     return most_common_intersect
 
 # simple function to return a list of the nth most common points and their frequency
-def find_n_most_common_points(n, m0= 0, mmax = 1, clr = False):
-    intersect_available_lines_vectorized(m0, mmax, clr)
+def find_n_most_common_points(n, seed, m0= 0, mmax = 1, clr = False):
+    intersect_available_lines_vectorized_list(m0, mmax, seed, clr)
     counter = Counter(Intersects)
     n_most_common_intersects = counter.most_common(n)
     return n_most_common_intersects

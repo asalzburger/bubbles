@@ -122,6 +122,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--lines-amount", "--la", type=int, default=3, help="TEMPORARY UNTIL DYNAMIC IMPLEMENTATION! The amount of lines the transform will draw onto the seed")
     parser.add_argument("--number-seeds", "--ns","--num", action="store_true", help="Whether or not the seeds should be numbered in the image")
     parser.add_argument("--seed-index","--idx","--seed", type=int, default=None, help="The index of the seed you want to analyze. Defaults to the largest seed")
+    parser.add_argument("--seed-indices","--idc","--seeds", type=tuple_type, default=None, help="Multiple indices of the seeds you want to analyze.")
     parser.add_argument("--chart","--ch", action="store_true", help="Turn on the m/t chart")
     parser.add_argument("--only-all","--oa", action="store_true", help="Saves only the seed overlay for all found seeds")
     parser.add_argument("--clear-intersects","--ci", action="store_false", help="Stops clearing the Intersects list in transform.py before recalculating it")
@@ -182,11 +183,37 @@ def save_specific_seed(seeds: list[Seed], n: int):
     print(f"Saved overlay for seed {n} to {chosen_path}")
     if arguments.print_intersects is not None:
         if int(arguments.print_intersects) >= 0:
-            print("Intersection Points for this seed: ", transform.find_n_most_common_points(int(arguments.print_intersects), arguments.min_slope, arguments.max_slope, arguments.clear_intersects))
+            print("Intersection Points for this seed: ", transform.find_n_most_common_points(int(arguments.print_intersects), seeds[n], arguments.min_slope, arguments.max_slope, arguments.clear_intersects))
         else:
             raise ValueError("print-intersects must be positive or 0!")
     if arguments.chart:
-        transform.draw_chart(arguments.min_slope, arguments.max_slope, f"Seed {n} m/t chart")
+        cseeds = [seeds[n]]
+        transform.draw_chart(arguments.min_slope, arguments.max_slope, cseeds, False, f"Seed {n} m/t chart")
+
+def tuple_type(arg):
+    return tuple(map(int, arg.split(',')))
+
+def save_multiple_seeds(seeds: list[Seed], n: tuple):
+    # if n < 0 or None:
+    #     raise ValueError("Seed indices must be positive or 0!")
+    cseeds = []
+    print(len(seeds))
+    for i in range(len(n)):
+        cseeds.append(seeds[n[i]])
+    chosen_path = arguments.output.with_name(f"{arguments.output.stem}_seeds_{n}_{arguments.output.suffix}")
+    line_path = arguments.output.with_name(f"{arguments.output.stem}_seeds_{n}_transform_lines{arguments.output.suffix}")
+    draw_seeds(arguments.image, cseeds, chosen_path)
+    #transform.draw_pixel_lines(arguments.min_slope, arguments.max_slope, chosen_path, line_pixel_path)
+    # if not arguments.no_lines:
+    #     transform.drawLines(chosen_path, arguments.lines_amount, line_path, arguments.min_slope, arguments.max_slope, arguments.clear_intersects, arguments.length, chosen_seed, arguments.show_required)
+    print(f"Saved overlay for seeds {n} to {chosen_path}")
+    if arguments.print_intersects is not None:
+        if int(arguments.print_intersects) >= 0:
+            print("Intersection Points for these seeds: ", transform.find_n_most_common_points(int(arguments.print_intersects), seeds[n], arguments.min_slope, arguments.max_slope, arguments.clear_intersects))
+        else:
+            raise ValueError("print-intersects must be positive or 0!")
+    if arguments.chart:
+        transform.draw_chart(arguments.min_slope, arguments.max_slope, cseeds, True, f"Seed {n} m/t chart")
 
 def find_nearby_seeds(seeds: list[Seed], target_seed: Seed, distance_threshold: float) -> list[Seed]:
     nearby_seeds = []
@@ -447,7 +474,10 @@ if __name__ == "__main__":
     print(f"Found {len(found_seeds)} seeds. Saved overlay to {arguments.output}.")
     if not arguments.only_all:
         if not arguments.all:
-            save_specific_seed(found_seeds, arguments.seed_index)
+            if not arguments.seed_indices:
+                save_specific_seed(found_seeds, arguments.seed_index)
+            else:
+                save_multiple_seeds(found_seeds, arguments.seed_indices)
             if arguments.cluster_one:
                 draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
             elif arguments.cluster_all:
