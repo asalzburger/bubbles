@@ -491,4 +491,3 @@ if __name__ == "__main__":
                 transform.plot_lines(f"{arguments.output.stem}_clusters.json", arguments.merge, arguments.legend)
         else:
             draw_all_seeds(found_seeds)
-        #print(transform.getLines(arguments.min_slope, arguments.max_slope, found_seeds[arguments.seed_index],3,arguments.clear_intersects,arguments.length))
