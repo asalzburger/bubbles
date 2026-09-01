@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import random
 from PIL import Image, ImageDraw
@@ -47,74 +48,119 @@ def draw_lines_on_canvas(a: int, noise: int, output_path: Path, sizex: int = 182
             overlay_draw.line(points, fill=color, width=linewidth)
     Image.alpha_composite(canvas, overlay).save(output_path)
 
-def draw_tracks_on_canvas(a: int, output_path: Path,starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False):
+def _track_heading(points):
+    if len(points) < 2:
+        return -math.pi / 2
+    dx = points[-1][0] - points[-2][0]
+    dy = points[-1][1] - points[-2][1]
+    return math.atan2(dy, dx)
+
+
+def _arc_points(origin, start_angle: float, turn: float, length: float, sizex: int, sizey: int, steps: int = 80):
+    points = [origin]
+    step_count = max(10, steps)
+    step_length = max(1.0, length / step_count)
+    curvature = turn / max(1.0, length)
+
+    for i in range(1, step_count + 1):
+        s = i * step_length
+        theta = start_angle + curvature * s
+        x = origin[0] + math.cos(theta) * s
+        y = origin[1] + math.sin(theta) * s
+        if x < 0 or x > sizex or y < 0 or y > sizey:
+            break
+        points.append((int(round(x)), int(round(y))))
+    return points
+
+
+def _straight_branch(origin, heading: float, length: float, sizex: int, sizey: int):
+    end_x = int(np.clip(origin[0] + math.cos(heading) * length, 0, sizex - 1))
+    end_y = int(np.clip(origin[1] + math.sin(heading) * length, 0, sizey - 1))
+    return [origin, (end_x, end_y)]
+
+
+def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_draw, sizex, sizey, lwidth):
+    """Recursively generate child branches from a parent branch."""
+    if depth_remaining <= 0 or random.random() > 0.55:
+        return
+    
+    child_count = random.randint(1, max_splits)
+    for _ in range(child_count):
+        tip = branch[-1]
+        child_style = random.choices(["straight", "moderate", "spiral"], weights=[0.15, 0.40, 0.45])[0]
+        
+        if child_style == "straight":
+            child = _straight_branch(tip, _track_heading(branch) + random.uniform(-0.7, 0.7), random.randint(30, 90), sizex, sizey)
+        elif child_style == "moderate":
+            child = _arc_points(tip, _track_heading(branch) + random.uniform(-0.9, 0.9), random.uniform(-1.0, 1.0), random.randint(35, 110), sizex, sizey, steps=110)
+        else:
+            child = _arc_points(tip, _track_heading(branch) + random.uniform(-1.3, 1.3), random.choice([-2.8, 2.8]), random.randint(30, 80), sizex, sizey, steps=180)
+        
+        if len(child) > 1:
+            overlay_draw.line(child, fill="black", width=max(1, lwidth))
+            _generate_branches_recursive(child, depth_remaining - 1, max_splits, overlay_draw, sizex, sizey, lwidth)
+
+
+def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False):
     canvas = Image.new("RGBA", (sizex, sizey), "white")
     overlay = Image.new("RGBA", (sizex, sizey))
     overlay_draw = ImageDraw.Draw(overlay)
-    pt: tuple
-    pt = (random.randint(0, sizex), random.randint(sizey-starty ,sizey))
-    if lwidthrng:
-        linewidth = random.randint(0, 5)
-    else:
-        linewidth = lwidth
-    color = hsv_to_rgb_tuple(random.random(), 1.0, 1.0)
-    p1 = pt
-    p2 = (random.randint(0, sizex), random.randint(0, sizey))
-    overlay_draw.line([p1, p2], fill=color, width=linewidth)
-    pt = p2
-    for i in range(a-1):
-        points = Split(sizex, sizey, pt)
-        for x in range(len(points)):
-            if len(points[x]) == 2:
-                if lwidthrng:
-                    linewidth = random.randint(0, 5)
-                else:
-                    linewidth = lwidth
-                color = hsv_to_rgb_tuple(random.random(), 1.0, 1.0)
-                overlay_draw.line(points[x], fill=color, width=linewidth)
-            if len(points[x]) == 3:
-                if lwidthrng:
-                    linewidth = random.randint(0, 5)
-                else:
-                    linewidth = lwidth
-                color = hsv_to_rgb_tuple(random.random(), 1.0, 1.0)
-                overlay_draw.line(points[x], fill=color, width=linewidth, joint="curve")
-            if len(points[x]) > 3:
-                if lwidthrng:
-                    linewidth = random.randint(0, 5)
-                else:
-                    linewidth = lwidth
-                color = hsv_to_rgb_tuple(random.random(), 1.0, 1.0)
-                overlay_draw.line(points[x], fill=color, width=linewidth)
-        x = points[random.randint(0, len(points) - 1)]
-        x1 = x[len(x)-1]
-        pt = x1
+
+    vertex_x = random.randint(int(sizex * 0.35), int(sizex * 0.65))
+    vertex_y = random.randint(int(sizey * 0.22), int(sizey * 0.55))
+    vertex = (vertex_x, vertex_y)
+
+    incoming_start = (vertex_x + random.randint(-5, 5), sizey + random.randint(50, 200))
+    incoming_end = (vertex_x + random.randint(-10, 10), vertex_y)
+    overlay_draw.line([incoming_start, incoming_end], fill="black", width=max(1, lwidth))
+
+    root_branches = []
+    directions = [-2.7, -2.2, -1.7, -1.2, -0.7, 0.7, 1.2, 1.7, 2.2, 2.7]
+    track_count = max(1, min(7, splits))
+
+    for _ in range(track_count):
+        direction = random.choice(directions)
+        turn = random.uniform(-2.8, 2.8)
+        length = random.randint(80, max(180, sizey // 2))
+        if random.random() < 0.45:
+            turn *= 1.9
+            length = random.randint(140, max(260, sizey))
+
+        origin = incoming_end
+        if random.random() < 0.35:
+            branch = _straight_branch(origin, direction, length, sizex, sizey)
+        else:
+            branch = _arc_points(origin, direction, turn, length, sizex, sizey, steps=260)
+
+        if len(branch) > 1:
+            root_branches.append(branch)
+            overlay_draw.line(branch, fill="black", width=max(1, lwidth))
+            _generate_branches_recursive(branch, max_depth, splits, overlay_draw, sizex, sizey, lwidth)
+
     Image.alpha_composite(canvas, overlay).save(output_path)
 
-def Split(sizex: int, sizey: int, ps):
-    pt = ps
-    points = []
-    for i in range(random.randint(1, 3)):
-        f = random.randint(0,2)
-        match f:
-            case 0:
-                p1 = pt
-                p2 = (random.randint(0, sizex), random.randint(0, sizey))
-                pt = p2
-                points.append([p1,p2])
-            case 1:
-                p1 = pt
-                p2 = (random.randint(0, sizex), random.randint(0, sizey))
-                p3 = (random.randint(0, sizex), random.randint(0, sizey))
-                points.append([p1, p2, p3])
-            case 2:
-                p0 = pt
-                p1 = (random.randint(0, sizex), random.randint(0, sizey))
-                p2 = (random.randint(0, sizex), random.randint(0, sizey))
-                p3 = (random.randint(0, sizex), random.randint(0, sizey))
-                                
-                points.append(cubic_bezier(p0, p1, p2, p3))
-    return points
+
+def Split(sizex: int, sizey: int, ps, heading: float, turn: float, spread: int = 90):
+    origin = ps
+    branch_paths = []
+    branch_count = random.randint(1, 3)
+
+    for _ in range(branch_count):
+        local_heading = heading + random.uniform(-1.8, 1.8)
+        local_turn = max(-3.2, min(3.2, turn + random.uniform(-1.8, 1.8)))
+        local_length = random.randint(30, max(60, spread))
+        if random.random() < 0.4:
+            local_turn *= 1.9
+            local_length = random.randint(110, max(180, spread * 2))
+
+        if random.random() < 0.45:
+            path = _straight_branch(origin, local_heading, local_length, sizex, sizey)
+        else:
+            path = _arc_points(origin, local_heading, local_turn, local_length, sizex, sizey, steps=260)
+        if len(path) > 1:
+            branch_paths.append(path)
+
+    return branch_paths
 
 def add_gaussian_noise(image, std=10):
     arr = np.array(image).astype(np.float32)
@@ -204,6 +250,7 @@ def createGrid(sizex, sizey, g):
     final_list.append(y_list)
     return final_list
 
+
 def drawGrid(sizex, sizey, g, input_path, sat):
     lines = createGrid(sizex, sizey, g)
     image = Image.open(input_path).convert("RGBA")
@@ -241,6 +288,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--amount","--a",type=int,default=1,)
     parser.add_argument("--grid","--g",type=int,default=1,)
     parser.add_argument("--grid-saturation","--grid-sat","--gs",type=float,default=0.5,)
+    parser.add_argument("--splits","--spl",type=int,default=3,)
     parser.add_argument("--noise","--n",type=int,default=0,)
     parser.add_argument("--salt-and-pepper","--sp",type=float,default=0)
     parser.add_argument("--salt-noise","--sn",type=float,default=0)
@@ -259,7 +307,7 @@ if __name__ == "__main__":
     if not arguments.tracks:
         draw_lines_on_canvas(arguments.amount, arguments.noise, arguments.output, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.curves, arguments.brezier_curves)
     else:
-        draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.start_y,arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize)
+        draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.splits, arguments.start_y, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize)
     if arguments.salt_noise != 0:
         createSaltNoise(arguments.salt_noise, arguments.output)
     if arguments.noise != 0:
