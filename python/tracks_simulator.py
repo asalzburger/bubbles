@@ -57,22 +57,112 @@ def _track_heading(points):
     return math.atan2(dy, dx)
 
 
+# def _arc_points(origin, start_angle: float, turn: float, length: float, sizex: int, sizey: int, steps: int = 80):
+#     points = [origin]
+#     step_count = max(10, steps)
+#     step_length = max(1.0, length / step_count)
+#     curvature = turn / max(1.0, length)
+
+#     for i in range(1, step_count + 1):
+#         s = i * step_length
+#         theta = start_angle + curvature * s
+#         x = origin[0] + math.cos(theta) * s
+#         y = origin[1] + math.sin(theta) * s
+#         if x < 0 or x > sizex or y < 0 or y > sizey:
+#             break
+#         points.append((int(round(x)), int(round(y))))
+#     return points
+
 def _arc_points(origin, start_angle: float, turn: float, length: float, sizex: int, sizey: int, steps: int = 80):
+    """Generate points along a circular arc with constant radius."""
     points = [origin]
     step_count = max(10, steps)
-    step_length = max(1.0, length / step_count)
-    curvature = turn / max(1.0, length)
-
+    
+    if turn == 0:
+        # Straight line
+        end_x = int(np.clip(origin[0] + math.cos(start_angle) * length, 0, sizex - 1))
+        end_y = int(np.clip(origin[1] + math.sin(start_angle) * length, 0, sizey - 1))
+        return [origin, (end_x, end_y)]
+    
+    # Calculate radius from the turn parameter
+    radius = length / abs(turn) if turn != 0 else float('inf')
+    
+    # Find center of circle (perpendicular to start direction at distance radius)
+    perpendicular_angle = start_angle + (math.pi / 2 if turn > 0 else -math.pi / 2)
+    center_x = origin[0] + radius * math.cos(perpendicular_angle)
+    center_y = origin[1] + radius * math.sin(perpendicular_angle)
+    
+    # Generate points along the arc at equal angles around the center
+    angle_step = turn / step_count
+    current_angle = math.atan2(origin[1] - center_y, origin[0] - center_x)
+    
     for i in range(1, step_count + 1):
-        s = i * step_length
-        theta = start_angle + curvature * s
-        x = origin[0] + math.cos(theta) * s
-        y = origin[1] + math.sin(theta) * s
+        current_angle += angle_step
+        x = center_x + radius * math.cos(current_angle)
+        y = center_y + radius * math.sin(current_angle)
+        
         if x < 0 or x > sizex or y < 0 or y > sizey:
             break
         points.append((int(round(x)), int(round(y))))
+    
     return points
 
+# def _arc_points_decreasing_radius(origin, start_angle: float, turn: float, length: float, sizex: int, sizey: int, steps: int = 80):
+#     """Arc with decreasing radius (tighter as it goes). Used for physics simulation."""
+#     points = [origin]
+#     step_count = max(10, steps)
+#     step_length = max(1.0, length / step_count)
+#     base_curvature = turn / max(1.0, length)
+
+#     for i in range(1, step_count + 1):
+#         s = i * step_length
+#         # Progressively increase curvature as distance increases (decreasing radius)
+#         progress = i / step_count  # 0 to 1
+#         curvature = base_curvature * (1.0 + progress)  # Increases curvature over time
+#         theta = start_angle + curvature * s
+#         x = origin[0] + math.cos(theta) * s
+#         y = origin[1] + math.sin(theta) * s
+#         if x < 0 or x > sizex or y < 0 or y > sizey:
+#             break
+#         points.append((int(round(x)), int(round(y))))
+#     return points
+
+def _arc_points_decreasing_radius(origin, start_angle: float, turn: float, length: float, sizex: int, sizey: int, steps: int = 80):
+    """Arc with decreasing radius (tighter as it goes). Used for physics simulation."""
+    points = [origin]
+    step_count = max(10, steps)
+    
+    if turn == 0:
+        end_x = int(np.clip(origin[0] + math.cos(start_angle) * length, 0, sizex - 1))
+        end_y = int(np.clip(origin[1] + math.sin(start_angle) * length, 0, sizey - 1))
+        return [origin, (end_x, end_y)]
+    
+    # Start with radius based on length and turn
+    initial_radius = length / abs(turn)
+    
+    # Find center of circle (perpendicular to start direction)
+    perpendicular_angle = start_angle + (math.pi / 2 if turn > 0 else -math.pi / 2)
+    center_x = origin[0] + initial_radius * math.cos(perpendicular_angle)
+    center_y = origin[1] + initial_radius * math.sin(perpendicular_angle)
+    
+    # Generate points along the arc with decreasing radius
+    angle_step = turn / step_count
+    current_angle = math.atan2(origin[1] - center_y, origin[0] - center_x)
+    
+    for i in range(1, step_count + 1):
+        progress = i / step_count  # 0 to 1
+        # Radius decreases from initial to a smaller value
+        radius = initial_radius * (1.0 - 0.5 * progress)  # Decreases to 50% of initial
+        
+        current_angle += angle_step
+        x = center_x + radius * math.cos(current_angle)
+        y = center_y + radius * math.sin(current_angle)
+        
+        if x < 0 or x > sizex or y < 0 or y > sizey:
+            break
+        points.append((int(round(x)), int(round(y))))
+    
+    return points
 
 def _straight_branch(origin, heading: float, length: float, sizex: int, sizey: int):
     end_x = int(np.clip(origin[0] + math.cos(heading) * length, 0, sizex - 1))
@@ -80,7 +170,7 @@ def _straight_branch(origin, heading: float, length: float, sizex: int, sizey: i
     return [origin, (end_x, end_y)]
 
 
-def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_draw, sizex, sizey, lwidth):
+def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics=False, spirals_enabled=False):
     """Recursively generate child branches from a parent branch."""
     if depth_remaining <= 0 or random.random() > 0.55:
         return
@@ -88,21 +178,28 @@ def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_dr
     child_count = random.randint(1, max_splits)
     for _ in range(child_count):
         tip = branch[-1]
-        child_style = random.choices(["straight", "moderate", "spiral"], weights=[0.15, 0.40, 0.45])[0]
+        # Only include spiral if spirals are explicitly enabled
+        if spirals_enabled:
+            child_style = random.choices(["straight", "moderate", "spiral"], weights=[0.15, 0.40, 0.45])[0]
+        else:
+            child_style = random.choices(["straight", "moderate"], weights=[0.25, 0.75])[0]
         
         if child_style == "straight":
             child = _straight_branch(tip, _track_heading(branch) + random.uniform(-0.7, 0.7), random.randint(30, 90), sizex, sizey)
         elif child_style == "moderate":
-            child = _arc_points(tip, _track_heading(branch) + random.uniform(-0.9, 0.9), random.uniform(-1.0, 1.0), random.randint(35, 110), sizex, sizey, steps=110)
-        else:
-            child = _arc_points(tip, _track_heading(branch) + random.uniform(-1.3, 1.3), random.choice([-2.8, 2.8]), random.randint(30, 80), sizex, sizey, steps=180)
+            if simulate_physics:
+                child = _arc_points_decreasing_radius(tip, _track_heading(branch) + random.uniform(-0.9, 0.9), random.uniform(-1.0, 1.0), random.randint(35, 110), sizex, sizey, steps=110)
+            else:
+                child = _arc_points(tip, _track_heading(branch) + random.uniform(-0.9, 0.9), random.uniform(-1.0, 1.0), random.randint(35, 110), sizex, sizey, steps=110)
+        else:  # spiral
+            child = _arc_points_decreasing_radius(tip, _track_heading(branch) + random.uniform(-1.3, 1.3), random.choice([-2.8, 2.8]), random.randint(30, 80), sizex, sizey, steps=180)
         
         if len(child) > 1:
-            overlay_draw.line(child, fill="black", width=max(1, lwidth))
-            _generate_branches_recursive(child, depth_remaining - 1, max_splits, overlay_draw, sizex, sizey, lwidth)
+            overlay_draw.line(child, fill=hsv_to_rgb_tuple(random.random(), 1.0, 1.0), width=max(1, lwidth))
+            _generate_branches_recursive(child, depth_remaining - 1, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled)
 
 
-def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False):
+def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False, simulate_physics: bool = False, spirals_enabled: bool = False):
     canvas = Image.new("RGBA", (sizex, sizey), "white")
     overlay = Image.new("RGBA", (sizex, sizey))
     overlay_draw = ImageDraw.Draw(overlay)
@@ -113,7 +210,7 @@ def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, st
 
     incoming_start = (vertex_x + random.randint(-5, 5), sizey + random.randint(50, 200))
     incoming_end = (vertex_x + random.randint(-10, 10), vertex_y)
-    overlay_draw.line([incoming_start, incoming_end], fill="black", width=max(1, lwidth))
+    overlay_draw.line([incoming_start, incoming_end], fill=hsv_to_rgb_tuple(random.random(), 1.0, 1.0), width=max(1, lwidth))
 
     root_branches = []
     directions = [-2.7, -2.2, -1.7, -1.2, -0.7, 0.7, 1.2, 1.7, 2.2, 2.7]
@@ -131,12 +228,15 @@ def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, st
         if random.random() < 0.35:
             branch = _straight_branch(origin, direction, length, sizex, sizey)
         else:
-            branch = _arc_points(origin, direction, turn, length, sizex, sizey, steps=260)
+            if simulate_physics:
+                branch = _arc_points_decreasing_radius(origin, direction, turn, length, sizex, sizey, steps=260)
+            else:
+                branch = _arc_points(origin, direction, turn, length, sizex, sizey, steps=260)
 
         if len(branch) > 1:
             root_branches.append(branch)
-            overlay_draw.line(branch, fill="black", width=max(1, lwidth))
-            _generate_branches_recursive(branch, max_depth, splits, overlay_draw, sizex, sizey, lwidth)
+            overlay_draw.line(branch, fill=hsv_to_rgb_tuple(random.random(), 1.0, 1.0), width=max(1, lwidth))
+            _generate_branches_recursive(branch, max_depth, splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled)
 
     Image.alpha_composite(canvas, overlay).save(output_path)
 
@@ -290,9 +390,10 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Create lines on a white canvas"
     )
+    parser.add_argument("--simulate-physics","--simphys","--smph",action="store_true")
     parser.add_argument("--output","--o",type=Path,default=project_root / "resources" / "simulated.png",)
     parser.add_argument("--amount","--a",type=int,default=1,)
-    parser.add_argument("--grid","--g",type=int,default=1,)
+    parser.add_argument("--grid","--g",type=int,default=0,)
     parser.add_argument("--grid-saturation","--grid-sat","--gs",type=float,default=0.5,)
     parser.add_argument("--splits","--spl",type=int,default=3,)
     parser.add_argument("--noise","--n",type=int,default=0,)
@@ -305,6 +406,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--curves","--c",type=int, default=0)
     parser.add_argument("--brezier-curves", "--bc", type=int, default=0)
     parser.add_argument("--tracks", "--t", action="store_true")
+    parser.add_argument("--spirals", action="store_true")
     parser.add_argument("--start-y", "--sty", type=int, default=10)
     parser.add_argument("--create-dataset", "--dataset", "--d", action="store_true")
     parser.add_argument("--dataset-size", "--ds", type=int, default = 1)
@@ -363,7 +465,7 @@ if __name__ == "__main__":
         if not arguments.tracks:
             draw_lines_on_canvas(arguments.amount, arguments.noise, arguments.output, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.curves, arguments.brezier_curves)
         else:
-            draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.splits, arguments.start_y, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize)
+            draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.splits, arguments.start_y, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.simulate_physics, arguments.spirals)
         if arguments.salt_noise != 0:
             createSaltNoise(arguments.salt_noise, arguments.output)
         if arguments.noise != 0:
