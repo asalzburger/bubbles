@@ -138,6 +138,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--cluster-all","--cla", action="store_true", help="Starts the clustering algorithm for all seeds")
     parser.add_argument("--merge","--mrg", action="store_true", help="Merges the final lines when clustering")
     parser.add_argument("--simulate","--sim", action="store_true", help="Easy access to the simulated.png returned from the simulator")
+    parser.add_argument("--show-cluster-height", "--sch", action="store_true")
     parser.add_argument("--legend","--leg", action="store_true", help="Shows the Legend for the clustering chart")
     return parser.parse_args()
 
@@ -492,6 +493,6 @@ if __name__ == "__main__":
                 draw_cluster(found_seeds, found_seeds[arguments.seed_index], arguments.dist)
             elif arguments.cluster_all:
                 draw_clusters(found_seeds, arguments.dist)
-                transform.plot_lines(f"{arguments.output.stem}_clusters.json", arguments.merge, arguments.legend)
+                transform.plot_lines(f"{arguments.output.stem}_clusters.json", arguments.merge, arguments.legend, arguments.slice_height, arguments.output, arguments.show_cluster_height)
         else:
             draw_all_seeds(found_seeds)

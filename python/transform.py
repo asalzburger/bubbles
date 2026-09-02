@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from sympy import Point, Point2D, Line, evalf, Symbol, Polygon, N, pi, Line2D, Point, oo
-from collections import Counter
+from collections import Counter, defaultdict
 import itertools
 import Circle
 import find_seeds
@@ -80,9 +80,11 @@ def draw_chart(m0, m1, seeds, mltp, window_name = "Seed m/t chart"):
                 plt.plot(x, y, marker="o")
     plt.show()
 
-def plot_lines(filename, merge: bool, legend):
+def plot_lines(filename, merge: bool, legend, sh, output, showslcs: bool = False):
     script_dir = Path(__file__).parent.parent
     target_path = script_dir / "resources" / filename
+    with Image.open(output) as img:
+        sizex, sizey = img.size
     fig, ax = plt.subplots()
     fig.canvas.manager.set_window_title("Cluster Chart")
     with open(target_path, "r") as f:
@@ -97,6 +99,12 @@ def plot_lines(filename, merge: bool, legend):
             x1, y1 = obj["start"]
             x2, y2 = obj["end"]
             ax.plot([x1, x2], [y1, y2], label=f"Seed=s{obj['target_seed']}")
+    if showslcs:
+        i = 0
+        while i < sizey:
+            ax.axhline(y=i)
+            i += sh
+
     if legend:        
         ax.legend()
     ax.set_xlabel("x")
@@ -137,6 +145,30 @@ def plot_intersection_points(m0, m1, clr,seeds: list[find_seeds.Seed], mltp: int
     plt.show()
 
 
+def is_straight(polyline, tol=1e-3):
+    """
+    Check if a polyline (list of (x,y)) is (approximately) straight.
+    Uses the maximum perpendicular distance from the chord.
+    """
+    pts = np.array(polyline)
+    if len(pts) < 3:
+        return True  # a segment is trivially straight
+
+    # Vector from first to last point
+    chord = pts[-1] - pts[0]
+    chord_len = np.linalg.norm(chord)
+    if chord_len < 1e-12:
+        return True
+
+    # Unit normal to the chord
+    normal = np.array([-chord[1], chord[0]]) / chord_len
+
+    # Perpendicular distances of all interior points from the chord
+    interior = pts[1:-1]
+    dists = np.abs((interior - pts[0]) @ normal)
+
+    return np.max(dists) < tol   
+
 # DEPRECATED / UNUSED histogram function for the hough transform
 def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step):
     m_values = np.arange(m_min, m_max, m_step)
@@ -155,8 +187,6 @@ def hough_transform_histogram(pixels, m_min, m_max, t_min, t_max, m_step, t_step
             accumulator[i, j] += 1
             
     return m_values, t_values, accumulator
-
-from sympy import Line2D, Point, oo
 
 def interpolate_lines(line1: Line2D, line2: Line2D, tol=1e-9) -> Line2D | None:
     m1, m2 = line1.slope, line2.slope
@@ -613,3 +643,45 @@ def merge_segments(segments, slope_tol=0.05, dist_tol=5.0):
         })
 
     return merged
+
+# def merge_segments(segments, tol=1e-6):
+#     """
+#     Merge a list of segments [(x1,y1,x2,y2), ...] into polylines
+#     by chaining segments that share endpoints (within tolerance).
+#     """
+#     # Round coordinates to snap near-duplicates
+#     def snap(pt):
+#         return (round(pt[0] / tol) * tol, round(pt[1] / tol) * tol)
+
+#     # Build adjacency: endpoint -> list of (other_endpoint, segment_index)
+#     adj = defaultdict(list)
+#     for i, (x1, y1, x2, y2) in enumerate(segments):
+#         a, b = snap((x1, y1)), snap((x2, y2))
+#         adj[a].append((b, i))
+#         adj[b].append((a, i))
+
+#     # Find paths by walking from degree-1 nodes (endpoints of polylines)
+#     used = set()
+#     polylines = []
+
+#     for start in [k for k, v in adj.items() if len(v) == 1]:
+#         if any(i in used for _, i in adj[start]):
+#             continue
+#         # Walk the chain
+#         path = [start]
+#         cur = start
+#         while True:
+#             # Find next unused segment from current node
+#             next_node = None
+#             for other, idx in adj[cur]:
+#                 if idx not in used:
+#                     used.add(idx)
+#                     next_node = other
+#                     break
+#             if next_node is None:
+#                 break
+#             path.append(next_node)
+#             cur = next_node
+#         polylines.append(path)
+
+#     return polylines
