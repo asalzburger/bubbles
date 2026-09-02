@@ -1,3 +1,4 @@
+import os
 import math
 import numpy as np
 import random
@@ -263,6 +264,11 @@ def drawGrid(sizex, sizey, g, input_path, sat):
         overlay_draw.line(pair, fill=color, width=1)
     Image.alpha_composite(image, overlay).save(input_path)
 
+def rotateImg(input_path, rot):
+    with Image.open(input_path) as im:
+        rotated = im.rotate(rot, expand=True)
+        rotated.save(input_path)
+
 def hsv_to_rgb_tuple(h: float, s: float, v: float) -> tuple[int, int, int]:
     """Convert HSV (each in 0-1) to a Pillow-compatible RGB tuple (0-255)."""
     r, g, b = colorsys.hsv_to_rgb(h, s, v)
@@ -300,19 +306,71 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--brezier-curves", "--bc", type=int, default=0)
     parser.add_argument("--tracks", "--t", action="store_true")
     parser.add_argument("--start-y", "--sty", type=int, default=10)
+    parser.add_argument("--create-dataset", "--dataset", "--d", action="store_true")
+    parser.add_argument("--dataset-size", "--ds", type=int, default = 1)
+    parser.add_argument("--dataset-name", "--dn", type=str, default="dataset")
     return parser.parse_args()
+
+def createDataset(s: int, dsn: str):
+    project_root = Path(__file__).parent.parent
+    dir_path = project_root / "resources" / "datasets" / dsn
+    os.mkdir(dir_path)
+    for i in range(s):
+        output_path = project_root / "resources" / "datasets" / dsn / f"{dsn}_{i}.png"
+        starty = 10;
+        amount = random.randint(3, 9)
+        splits = random.randint(1, 5)
+        sizex = random.randint(128, 1024)
+        sizey = random.randint(128, 1024)
+        lwidth = random.randint(1, 4)
+        lwidthrng = bool(random.getrandbits(1))
+        draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng)
+        noise = bool(random.getrandbits(1))
+        if noise:
+            noiseAmount = random.randint(0, 30)
+            createNoise(noiseAmount, output_path)
+        sp = bool(random.getrandbits(1))
+        if sp:
+            spAmount = random.random()
+            createSPNoise(spAmount, output_path)
+        sn = bool(random.getrandbits(1))
+        if sn:
+            snAmount = random.random()
+            createSaltNoise(snAmount, output_path)
+        grid = bool(random.getrandbits(1))
+        if grid:
+            gridDist = random.randint(2, 12)
+            gridSat = random.random()
+            drawGrid(sizex, sizey, gridDist, output_path, gridSat)
+        rot = bool(random.getrandbits(1))
+        if rot:
+            rotAmountMatch = random.randint(0,3)
+            rotAmount = 0
+            match rotAmountMatch:
+                case 0:
+                    rotAmount = 0
+                case 1:
+                    rotAmount = 90
+                case 2:
+                    rotAmount = 180
+                case 3:
+                    rotAmount = 270
+            rotateImg(output_path,rotAmount)
 
 if __name__ == "__main__":
     arguments = parse_arguments()
-    if not arguments.tracks:
-        draw_lines_on_canvas(arguments.amount, arguments.noise, arguments.output, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.curves, arguments.brezier_curves)
+    if not arguments.create_dataset:
+        if not arguments.tracks:
+            draw_lines_on_canvas(arguments.amount, arguments.noise, arguments.output, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.curves, arguments.brezier_curves)
+        else:
+            draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.splits, arguments.start_y, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize)
+        if arguments.salt_noise != 0:
+            createSaltNoise(arguments.salt_noise, arguments.output)
+        if arguments.noise != 0:
+            createNoise(arguments.noise, arguments.output)
+        if arguments.salt_and_pepper != 0:
+            createSPNoise(arguments.salt_and_pepper, arguments.output)
+        if arguments.grid != 0:
+            drawGrid(arguments.size_x, arguments.size_y, arguments.grid, arguments.output, arguments.grid_saturation)
     else:
-        draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.splits, arguments.start_y, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize)
-    if arguments.salt_noise != 0:
-        createSaltNoise(arguments.salt_noise, arguments.output)
-    if arguments.noise != 0:
-        createNoise(arguments.noise, arguments.output)
-    if arguments.salt_and_pepper != 0:
-        createSPNoise(arguments.salt_and_pepper, arguments.output)
-    if arguments.grid != 0:
-        drawGrid(arguments.size_x, arguments.size_y, arguments.grid, arguments.output, arguments.grid_saturation)
+        createDataset(arguments.dataset_size, arguments.dataset_name)
