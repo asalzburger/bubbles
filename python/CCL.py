@@ -3,7 +3,11 @@ from PIL import Image
 from skimage.morphology import skeletonize, remove_small_objects
 from collections import deque
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.patches import FancyArrowPatch
+import matplotlib.patheffects as pe
 from pathlib import Path
+import argparse
 
 def hoshen_kopelman(occupied, connectivity=8):
     m, n = occupied.shape
@@ -199,8 +203,153 @@ def trace_skeleton_clean(skel):
 
     return [t for t in trajectories if len(t) > 3]
 
+# def fit_circle(points):
+#     """
+#     Algebraic circle fit (Kasa method).
+#     points: (N, 2) array of (row, col) pixel coordinates.
+#     Returns (center_row, center_col, radius_px) or None if degenerate.
+#     """
+#     if len(points) < 3:
+#         return None
+#     x = points[:, 1].astype(float)  # col
+#     y = points[:, 0].astype(float)  # row
 
-def extract_and_plot(input_path, threshold=0.3, min_size=30, max_spur=5):
+#     # Solve: x² + y² + Dx + Ey + F = 0
+#     A = np.column_stack([x, y, np.ones(len(x))])
+#     b = -(x**2 + y**2)
+#     result, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+
+#     cx = -result[0] / 2
+#     cy = -result[1] / 2
+#     r = np.sqrt(cx**2 + cy**2 - result[2])
+
+#     if r < 0 or np.isnan(r):
+#         return None
+#     return (cy, cx, r)  # (center_col, center_row, radius_px)
+
+def fit_circle(points):
+    """Kasa algebraic circle fit. Returns (cx, cy, r_px) or None."""
+    if len(points) < 3:
+        return None
+    x = points[:, 1].astype(float)
+    y = points[:, 0].astype(float)
+    A = np.column_stack([x, y, np.ones(len(x))])
+    b = -(x**2 + y**2)
+    result, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+    cx = -result[0] / 2
+    cy = -result[1] / 2
+    r = np.sqrt(cx**2 + cy**2 - result[2])
+    if r < 0 or np.isnan(r):
+        return None
+    return (cx, cy, r)
+
+def analyze_tracks(all_trajs, px_per_mm=1.0, B_field_T=1.0):
+    """
+    Fit circles to each trajectory and compute momentum.
+    
+    px_per_mm: pixels per millimeter (calibrate from chamber boundary)
+    B_field_T: magnetic field in Tesla
+    """
+    results = []
+    for c, path in all_trajs:
+        if len(path) < 10:
+            continue
+        fit = fit_circle(path)
+        if fit is None:
+            continue
+        cx, cy, r_px = fit
+        r_mm = r_px / px_per_mm
+        r_m = r_mm / 1000.0
+
+        # Momentum: p [GeV/c] = 0.3 × B [T] × r [m] × q
+        # For a single-charge particle (q=1):
+        p_GeV = 0.3 * B_field_T * r_m
+
+        # Goodness of fit: RMS residual
+        residuals = np.sqrt((path[:,1] - cx)**2 + (path[:,0] - cy)**2) - r_px
+        rms = np.sqrt(np.mean(residuals**2))
+
+        results.append({
+            'component': c,
+            'center': (cx, cy),
+            'radius_px': r_px,
+            'radius_mm': r_mm,
+            'momentum_GeV': p_GeV,
+            'rms_residual_px': rms,
+            'n_points': len(path),
+        })
+    return results 
+
+def fit_spiral(points):
+    """Fit a logarithmic spiral r = a * exp(b * theta)."""
+    # 1. Estimate center from the innermost point
+    # 2. Compute (r, theta) relative to center
+    # 3. Linear fit: log(r) = log(a) + b * theta
+    cx, cy, _ = fit_circle(points)  # initial center estimate
+    dx = points[:, 1] - cx
+    dy = points[:, 0] - cy
+    r = np.sqrt(dx**2 + dy**2)
+    theta = np.arctan2(dy, dx)
+
+    # Unwrap theta for continuity
+    theta = np.unwrap(theta)
+
+    # Linear fit: log(r) = log(a) + b*theta
+    valid = r > 1  # avoid log(0)
+    A = np.column_stack([np.ones(valid.sum()), theta[valid]])
+    b = np.log(r[valid])
+    result, _, _, _ = np.linalg.lstsq(A, b, rcond=None)
+
+    a = np.exp(result[0])
+    b_param = result[1]
+    return cx, cy, a, b_param  # b_param < 0 for a decaying spiral   
+
+# def extract_and_plot(input_path, threshold=0.3, min_size=30, max_spur=5):
+#     img = Image.open(input_path).convert("RGB")
+#     arr = np.array(img)
+#     mx = arr.max(axis=2).astype(float)
+#     mn = arr.min(axis=2).astype(float)
+#     sat = np.where(mx > 0, (mx - mn) / mx, 0)
+#     fg = sat > threshold
+
+#     labels = hoshen_kopelman(fg, connectivity=8)
+#     print(f"Connected components: {labels.max()}")
+
+#     all_trajs = []
+#     for c in range(1, labels.max() + 1):
+#         comp = (labels == c)
+#         if comp.sum() < min_size:
+#             print(f"  Component {c}: skipped (size {comp.sum()})")
+#             continue
+#         skel = skeletonize(comp)
+#         skel = prune_spurs(skel, max_spur_length=max_spur)
+#         paths = trace_skeleton_clean(skel)
+#         print(f"  Component {c}: {len(paths)} trajectory(ies)")
+#         for i, p in enumerate(paths):
+#             all_trajs.append((f"line_{c}_{i}", p))
+
+    # Plot
+    # fig, ax = plt.subplots(figsize=(10, 10))
+    # ax.imshow(img)
+    # for name, path in all_trajs:
+    #     ax.plot(path[:, 1], path[:, 0], linewidth=2.5, label=name, alpha=0.8)
+    #     ax.plot(path[0,1], path[0,0], 'o', color='lime', markersize=10, zorder=5)
+    #     ax.plot(path[-1,1], path[-1,0], 's', color='red', markersize=10, zorder=5)
+    # ax.legend(fontsize=9, loc='upper right')
+    # ax.set_aspect('equal')
+    # plt.tight_layout()
+    # plt.savefig("trajectories_final.png", dpi=150, bbox_inches='tight')
+    # plt.show()
+    # return all_trajs
+
+def extract_and_plot(input_path, threshold=0.3, min_size=30, max_spur=5,
+                     px_per_mm=1.0, B_field_T=1.0):
+    """
+    Original pipeline + circle fit + momentum annotation.
+
+    px_per_mm  : pixels per millimeter (calibrate from chamber boundary)
+    B_field_T  : magnetic field strength in Tesla
+    """
     img = Image.open(input_path).convert("RGB")
     arr = np.array(img)
     mx = arr.max(axis=2).astype(float)
@@ -215,29 +364,74 @@ def extract_and_plot(input_path, threshold=0.3, min_size=30, max_spur=5):
     for c in range(1, labels.max() + 1):
         comp = (labels == c)
         if comp.sum() < min_size:
-            print(f"  Component {c}: skipped (size {comp.sum()})")
             continue
         skel = skeletonize(comp)
         skel = prune_spurs(skel, max_spur_length=max_spur)
         paths = trace_skeleton_clean(skel)
-        print(f"  Component {c}: {len(paths)} trajectory(ies)")
         for i, p in enumerate(paths):
-            all_trajs.append((f"line_{c}_{i}", p))
+            # --- Circle fit + momentum ---
+            fit = fit_circle(p)
+            if fit is not None:
+                cx, cy, r_px = fit
+                r_m = (r_px / px_per_mm) / 1000.0
+                p_GeV = 0.3 * B_field_T * r_m  # single-charge particle
+                # RMS residual as fit quality
+                residuals = np.sqrt((p[:,1]-cx)**2 + (p[:,0]-cy)**2) - r_px
+                rms = np.sqrt(np.mean(residuals**2))
+            else:
+                cx, cy, r_px, p_GeV, rms = None, None, None, None, None
 
-    # Plot
-    fig, ax = plt.subplots(figsize=(10, 10))
+            all_trajs.append((f"line_{c}_{i}", p, p_GeV, rms))
+
+    # --- Plot ---
+    fig, ax = plt.subplots(figsize=(12, 12))
     ax.imshow(img)
-    for name, path in all_trajs:
+
+    for name, path, p_GeV, rms in all_trajs:
         ax.plot(path[:, 1], path[:, 0], linewidth=2.5, label=name, alpha=0.8)
-        ax.plot(path[0,1], path[0,0], 'o', color='lime', markersize=10, zorder=5)
-        ax.plot(path[-1,1], path[-1,0], 's', color='red', markersize=10, zorder=5)
-    ax.legend(fontsize=9, loc='upper right')
+        ax.plot(path[0,1], path[0,0], 'o', color='lime', markersize=8, zorder=5)
+        ax.plot(path[-1,1], path[-1,0], 's', color='red', markersize=8, zorder=5)
+
+        # Annotate momentum at the track midpoint
+        if p_GeV is not None and p_GeV < 50:  # skip "straight" (r→∞) tracks
+            mid = len(path) // 2
+            mx_, my_ = path[mid, 1], path[mid, 0]
+            ax.annotate(f"{p_GeV:.2f} GeV/c",
+                        xy=(mx_, my_),
+                        xytext=(mx_ + 20, my_ - 20),
+                        fontsize=8, color='black', 
+                        zorder=6)
+    ax.legend(fontsize=8, loc='upper right')
     ax.set_aspect('equal')
     plt.tight_layout()
-    plt.savefig("trajectories_final.png", dpi=150, bbox_inches='tight')
+    plt.savefig("trajectories_with_momentum.png", dpi=150, bbox_inches='tight')
     plt.show()
+
+    # --- Print summary table ---
+    print(f"\n{'Track':<12} {'Radius (px)':>12} {'Momentum (GeV/c)':>18} {'RMS (px)':>10}")
+    print("-" * 55)
+    for name, path, p_GeV, rms in all_trajs:
+        if p_GeV is not None:
+            r_px = np.sqrt((path[:,1]-fit_circle(path)[0])**2 + (path[:,0]-fit_circle(path)[1])**2).mean()
+            print(f"{name:<12} {r_px:>12.1f} {p_GeV:>18.3f} {rms:>10.2f}")
+        else:
+            print(f"{name:<12} {'(straight)':>12} {'∞':>18} {'—':>10}")
+
     return all_trajs
 
+def parse_arguments() -> argparse.Namespace:
+    #project_root = Path(__file__).parent.parent
+    parser = argparse.ArgumentParser(
+        description="CCL algorithm to find tracks of particles in images."
+    )
+    parser.add_argument("--input","--inp", type=str, default="bubbles/resources/simulated.png")
+    parser.add_argument("--threshold","--th","--t", type=float, default=0.3)
+    parser.add_argument("--min_size","--msz", type=int, default=30)
+    parser.add_argument("--max-spur","--mxs", type=int, default=5)
+    parser.add_argument("--b-flux", "--bf", type=float, default=1.0,help="B-Field Flux in T")
+    parser.add_argument("--pixels-per-mm", "--pxmm", type=float, default=1.0,help="B-Field Flux in T")
+    return parser.parse_args()
+
 if __name__ == "__main__":
-    input = Path("bubbles/resources/simulated.png")
-    extract_and_plot(input, max_spur=5)   
+    arguments = parse_arguments()
+    extract_and_plot(arguments.input, arguments.threshold, arguments.min_size, arguments.max_spur,)   
