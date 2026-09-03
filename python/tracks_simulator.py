@@ -413,7 +413,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--dataset-name", "--dn", type=str, default="dataset")
     return parser.parse_args()
 
-def createDataset(s: int, dsn: str):
+def createDataset(s: int, dsn: str, smphy: bool, spr: bool):
     project_root = Path(__file__).parent.parent
     dir_path = project_root / "resources" / "datasets" / dsn
     os.mkdir(dir_path)
@@ -426,7 +426,7 @@ def createDataset(s: int, dsn: str):
         sizey = random.randint(128, 1024)
         lwidth = random.randint(1, 4)
         lwidthrng = bool(random.getrandbits(1))
-        draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng)
+        draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng, smphy, spr)
         noise = bool(random.getrandbits(1))
         if noise:
             noiseAmount = random.randint(0, 30)
@@ -475,4 +475,4 @@ if __name__ == "__main__":
         if arguments.grid != 0:
             drawGrid(arguments.size_x, arguments.size_y, arguments.grid, arguments.output, arguments.grid_saturation)
     else:
-        createDataset(arguments.dataset_size, arguments.dataset_name)
+        createDataset(arguments.dataset_size, arguments.dataset_name, arguments.simulate_physics, arguments.spirals)
