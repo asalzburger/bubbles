@@ -170,7 +170,7 @@ def _straight_branch(origin, heading: float, length: float, sizex: int, sizey: i
     return [origin, (end_x, end_y)]
 
 
-def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics=False, spirals_enabled=False):
+def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics=False, spirals_enabled=False, line_color=None, mask_draw=None):
     """Recursively generate child branches from a parent branch."""
     if depth_remaining <= 0 or random.random() > 0.55:
         return
@@ -195,14 +195,24 @@ def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_dr
             child = _arc_points_decreasing_radius(tip, _track_heading(branch) + random.uniform(-1.3, 1.3), random.choice([-2.8, 2.8]), random.randint(30, 80), sizex, sizey, steps=180)
         
         if len(child) > 1:
-            overlay_draw.line(child, fill=hsv_to_rgb_tuple(random.random(), 1.0, 1.0), width=max(1, lwidth))
-            _generate_branches_recursive(child, depth_remaining - 1, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled)
+            overlay_draw.line(child, fill=line_color, width=max(1, lwidth))
+            if mask_draw is not None:
+                mask_draw.line(child, fill=255, width=max(1, lwidth))
+            _generate_branches_recursive(child, depth_remaining - 1, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled, line_color, mask_draw)
 
 
-def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False, simulate_physics: bool = False, spirals_enabled: bool = False):
+def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False, simulate_physics: bool = False, spirals_enabled: bool = False, save_mask: bool = False, black_and_white: bool = False, skip_incoming_line: bool = False):
     canvas = Image.new("RGBA", (sizex, sizey), "white")
     overlay = Image.new("RGBA", (sizex, sizey))
     overlay_draw = ImageDraw.Draw(overlay)
+    mask = Image.new("L", (sizex, sizey), 0) if save_mask else None
+    mask_draw = ImageDraw.Draw(mask) if mask is not None else None
+
+    def line_color():
+        if black_and_white:
+            shade = random.randint(0, 96)
+            return (shade, shade, shade)
+        return hsv_to_rgb_tuple(random.random(), 1.0, 1.0)
 
     vertex_x = random.randint(int(sizex * 0.35), int(sizex * 0.65))
     vertex_y = random.randint(int(sizey * 0.22), int(sizey * 0.55))
@@ -210,7 +220,10 @@ def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, st
 
     incoming_start = (vertex_x + random.randint(-5, 5), sizey + random.randint(50, 200))
     incoming_end = (vertex_x + random.randint(-10, 10), vertex_y)
-    overlay_draw.line([incoming_start, incoming_end], fill=hsv_to_rgb_tuple(random.random(), 1.0, 1.0), width=max(1, lwidth))
+    if not skip_incoming_line:
+        overlay_draw.line([incoming_start, incoming_end], fill=line_color(), width=max(1, lwidth))
+        if mask_draw is not None:
+            mask_draw.line([incoming_start, incoming_end], fill=255, width=max(1, lwidth))
 
     root_branches = []
     directions = [-2.7, -2.2, -1.7, -1.2, -0.7, 0.7, 1.2, 1.7, 2.2, 2.7]
@@ -235,10 +248,16 @@ def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, st
 
         if len(branch) > 1:
             root_branches.append(branch)
-            overlay_draw.line(branch, fill=hsv_to_rgb_tuple(random.random(), 1.0, 1.0), width=max(1, lwidth))
-            _generate_branches_recursive(branch, max_depth, splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled)
+            branch_color = line_color()
+            overlay_draw.line(branch, fill=branch_color, width=max(1, lwidth))
+            if mask_draw is not None:
+                mask_draw.line(branch, fill=255, width=max(1, lwidth))
+            _generate_branches_recursive(branch, max_depth, splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled, branch_color, mask_draw)
 
     Image.alpha_composite(canvas, overlay).save(output_path)
+    if mask is not None:
+        mask_path = output_path.with_name(f"{output_path.stem}_mask{output_path.suffix}")
+        mask.save(mask_path)
 
 
 def Split(sizex: int, sizey: int, ps, heading: float, turn: float, spread: int = 90):
@@ -352,12 +371,16 @@ def createGrid(sizex, sizey, g):
     return final_list
 
 
-def drawGrid(sizex, sizey, g, input_path, sat):
+def drawGrid(sizex, sizey, g, input_path, sat, bw: bool):
     lines = createGrid(sizex, sizey, g)
     image = Image.open(input_path).convert("RGBA")
     overlay = Image.new("RGBA", (sizex, sizey))
     overlay_draw = ImageDraw.Draw(overlay)
-    color = (*hsv_to_rgb_tuple(random.random(), sat, 1.0), 128)
+    color: tuple
+    if not bw:
+        color = (*hsv_to_rgb_tuple(random.random(), sat, 1.0), 128)
+    else:
+        color = (*hsv_to_rgb_tuple(0, 0, random.random()), 128)
     for pair in lines[0]:
         overlay_draw.line(pair, fill=color, width=1)
     for pair in lines[1]:
@@ -384,6 +407,10 @@ def cubic_bezier(p0, p1, p2, p3, num_points=100):
         points.append((x, y))
     return points
     
+def grayScaleImg(input):
+    img = Image.open(input)
+    grayscale_image = img.convert("L")
+    grayscale_image.save(input)
 
 def parse_arguments() -> argparse.Namespace:
     project_root = Path(__file__).parent.parent
@@ -407,13 +434,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--brezier-curves", "--bc", type=int, default=0)
     parser.add_argument("--tracks", "--t", action="store_true")
     parser.add_argument("--spirals", action="store_true")
+    parser.add_argument("--save-mask", action="store_true")
+    parser.add_argument("--skip-incoming-line", action="store_true")
     parser.add_argument("--start-y", "--sty", type=int, default=10)
     parser.add_argument("--create-dataset", "--dataset", "--d", action="store_true")
     parser.add_argument("--dataset-size", "--ds", type=int, default = 1)
     parser.add_argument("--dataset-name", "--dn", type=str, default="dataset")
+    parser.add_argument("--black-and-white", "--bw", action="store_true")
     return parser.parse_args()
 
-def createDataset(s: int, dsn: str, smphy: bool, spr: bool):
+def createDataset(s: int, dsn: str, smphy: bool, spr: bool, bw: bool):
     project_root = Path(__file__).parent.parent
     dir_path = project_root / "resources" / "datasets" / dsn
     os.mkdir(dir_path)
@@ -426,7 +456,11 @@ def createDataset(s: int, dsn: str, smphy: bool, spr: bool):
         sizey = random.randint(128, 1024)
         lwidth = random.randint(1, 4)
         lwidthrng = bool(random.getrandbits(1))
-        draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng, smphy, spr)
+        sil = bool(random.getrandbits(1))
+        if arguments.skip_incoming_line:
+            sil = True
+        lwidthrng = bool(random.getrandbits(1))
+        draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng, smphy, spr, True, True, sil)
         noise = bool(random.getrandbits(1))
         if noise:
             noiseAmount = random.randint(0, 30)
@@ -443,7 +477,7 @@ def createDataset(s: int, dsn: str, smphy: bool, spr: bool):
         if grid:
             gridDist = random.randint(2, 12)
             gridSat = random.random()
-            drawGrid(sizex, sizey, gridDist, output_path, gridSat)
+            drawGrid(sizex, sizey, gridDist, output_path, gridSat, bw)
         rot = bool(random.getrandbits(1))
         if rot:
             rotAmountMatch = random.randint(0,3)
@@ -458,6 +492,8 @@ def createDataset(s: int, dsn: str, smphy: bool, spr: bool):
                 case 3:
                     rotAmount = 270
             rotateImg(output_path,rotAmount)
+        if bw:
+            grayScaleImg(output_path)
 
 if __name__ == "__main__":
     arguments = parse_arguments()
@@ -465,7 +501,21 @@ if __name__ == "__main__":
         if not arguments.tracks:
             draw_lines_on_canvas(arguments.amount, arguments.noise, arguments.output, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.curves, arguments.brezier_curves)
         else:
-            draw_tracks_on_canvas(arguments.amount, arguments.output, arguments.splits, arguments.start_y, arguments.size_x, arguments.size_y, arguments.line_width, arguments.line_width_randomize, arguments.simulate_physics, arguments.spirals)
+            draw_tracks_on_canvas(
+                arguments.amount,
+                arguments.output,
+                arguments.splits,
+                arguments.start_y,
+                arguments.size_x,
+                arguments.size_y,
+                arguments.line_width,
+                arguments.line_width_randomize,
+                arguments.simulate_physics,
+                arguments.spirals,
+                save_mask=arguments.save_mask,
+                black_and_white=arguments.black_and_white,
+                skip_incoming_line=arguments.skip_incoming_line,
+            )
         if arguments.salt_noise != 0:
             createSaltNoise(arguments.salt_noise, arguments.output)
         if arguments.noise != 0:
@@ -475,4 +525,4 @@ if __name__ == "__main__":
         if arguments.grid != 0:
             drawGrid(arguments.size_x, arguments.size_y, arguments.grid, arguments.output, arguments.grid_saturation)
     else:
-        createDataset(arguments.dataset_size, arguments.dataset_name, arguments.simulate_physics, arguments.spirals)
+        createDataset(arguments.dataset_size, arguments.dataset_name, arguments.simulate_physics, arguments.spirals, arguments.black_and_white)

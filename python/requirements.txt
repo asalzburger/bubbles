@@ -2,3 +2,5 @@ Pillow
 sympy
 numpy
 matplotlib
+scikit-image
+scipy
