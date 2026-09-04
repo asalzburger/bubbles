@@ -412,6 +412,23 @@ def grayScaleImg(input):
     grayscale_image = img.convert("L")
     grayscale_image.save(input)
 
+def drawCircle(input, c: int, r:float, clr: tuple, w: int):
+    img = Image.open(input)
+    draw = ImageDraw.Draw(img)
+    draw.circle(c, r, outline=clr, width=w)
+    img.save(input)
+
+def drawCircles(input, a, bw):
+    if bw:
+        color = color = (*hsv_to_rgb_tuple(0, 0, random.random()), 128)
+    else:
+        color = (*hsv_to_rgb_tuple(random.random(), 1.0, 1.0), 128)
+    radius = random.randint(1, (int(math.hypot(arguments.size_x, arguments.size_y)/2)))
+    centerp = (random.randint(0, arguments.size_x), random.randint(0, arguments.size_x))
+    for i in range(a):
+        drawCircle(input, c=centerp, r=radius, clr = color, w = arguments.line_width)
+        radius += random.randint(1, (int(math.hypot(arguments.size_x, arguments.size_y)/2)))
+
 def parse_arguments() -> argparse.Namespace:
     project_root = Path(__file__).parent.parent
     parser = argparse.ArgumentParser(
@@ -426,6 +443,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--noise","--n",type=int,default=0,)
     parser.add_argument("--salt-and-pepper","--sp",type=float,default=0)
     parser.add_argument("--salt-noise","--sn",type=float,default=0)
+    parser.add_argument("--circle-noise", "--cn", type=int, default=0)
     parser.add_argument("--line-width","--lw",type=int,default=2,)
     parser.add_argument("--line-width-randomize","--lwr",action="store_true",)
     parser.add_argument("--size-x","--sx",type=int, default=182)
@@ -461,6 +479,10 @@ def createDataset(s: int, dsn: str, smphy: bool, spr: bool, bw: bool):
             sil = True
         lwidthrng = bool(random.getrandbits(1))
         draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng, smphy, spr, True, True, sil)
+        circles = bool(random.getrandbits(1))
+        if circles:
+            circlesAmt = random.randint(0, 2)
+            drawCircles(output_path, circlesAmt, bw)
         noise = bool(random.getrandbits(1))
         if noise:
             noiseAmount = random.randint(0, 30)
@@ -524,5 +546,9 @@ if __name__ == "__main__":
             createSPNoise(arguments.salt_and_pepper, arguments.output)
         if arguments.grid != 0:
             drawGrid(arguments.size_x, arguments.size_y, arguments.grid, arguments.output, arguments.grid_saturation)
+        if arguments.black_and_white:
+            grayScaleImg(arguments.output)
+        if arguments.circle_noise != 0:
+            drawCircles(arguments.output, arguments.circle_noise, arguments.black_and_white)
     else:
         createDataset(arguments.dataset_size, arguments.dataset_name, arguments.simulate_physics, arguments.spirals, arguments.black_and_white)
