@@ -201,7 +201,7 @@ def _generate_branches_recursive(branch, depth_remaining, max_splits, overlay_dr
             _generate_branches_recursive(child, depth_remaining - 1, max_splits, overlay_draw, sizex, sizey, lwidth, simulate_physics, spirals_enabled, line_color, mask_draw)
 
 
-def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False, simulate_physics: bool = False, spirals_enabled: bool = False, save_mask: bool = False, black_and_white: bool = False, skip_incoming_line: bool = False):
+def draw_tracks_on_canvas(max_depth: int, output_path: Path, mask_path: Path, splits: int = 3, starty: int = 10, sizex: int = 182, sizey: int = 562, lwidth: int = 2, lwidthrng: bool = False, simulate_physics: bool = False, spirals_enabled: bool = False, save_mask: bool = False, black_and_white: bool = False, skip_incoming_line: bool = False):
     canvas = Image.new("RGBA", (sizex, sizey), "white")
     overlay = Image.new("RGBA", (sizex, sizey))
     overlay_draw = ImageDraw.Draw(overlay)
@@ -256,7 +256,7 @@ def draw_tracks_on_canvas(max_depth: int, output_path: Path, splits: int = 3, st
 
     Image.alpha_composite(canvas, overlay).save(output_path)
     if mask is not None:
-        mask_path = output_path.with_name(f"{output_path.stem}_mask{output_path.suffix}")
+        # mask_path = output_path.with_name(f"{output_path.stem}_mask{output_path.suffix}")
         mask.save(mask_path)
 
 
@@ -436,6 +436,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--simulate-physics","--simphys","--smph",action="store_true", help="Used by the track simulator to decrease the radius of curved paths over time")
     parser.add_argument("--output","--o",type=Path,default=project_root / "resources" / "simulated.png",help="Output path for the image")
+    parser.add_argument("--mask-path","--mp",type=Path,default=project_root / "resources" / "simulated_mask.png",help="Output path for the track simulator mask")
     parser.add_argument("--amount","--a",type=int,default=1,help="Amount of lines for normal simulator, recursion depth for track simulator, or the maximum recursion depth for datasets")
     parser.add_argument("--grid","--g",type=int,default=0,help="Draws an optional grid as noise")
     parser.add_argument("--grid-saturation","--grid-sat","--gs",type=float,default=0.5,help="The Saturation of the grid")
@@ -464,24 +465,46 @@ def parse_arguments() -> argparse.Namespace:
 def createDataset(s: int, dsn: str, smphy: bool, spr: bool, bw: bool):
     project_root = Path(__file__).parent.parent
     dir_path = project_root / "resources" / "datasets" / dsn
+    img_path = project_root / "resources" / "datasets" / dsn / "images"
+    mask_path = project_root / "resources" / "datasets" / dsn / "masks"
     os.mkdir(dir_path)
+    os.mkdir(img_path)
+    os.mkdir(mask_path)
     for i in range(s):
-        output_path = project_root / "resources" / "datasets" / dsn / f"{dsn}_{i}.png"
+        output_path = project_root / "resources" / "datasets" / dsn / "images" / f"{dsn}_{i}.png"
+        mask_output = project_root / "resources" / "datasets" / dsn / "masks" / f"{dsn}_{i}.png"
         starty = 10
-        amount = random.randint(3, arguments.amout)
-        splits = random.randint(1, 5)
-        sizex = random.randint(128, 1024)
-        sizey = random.randint(128, 1024)
-        lwidth = random.randint(1, 4)
+        if arguments.amount < 3:
+            amount = random.randint(3, 7)
+        else:
+            amount = random.randint(3, arguments.amount)
+        if arguments.splits < 1:
+            splits = random.randint(1, 4)
+        else:
+            splits = random.randint(1, arguments.splits)
+        if arguments.size_x < 128:
+            sizex = random.randint(128, 1024)
+        else:
+            sizex = random.randint(128, arguments.size_x)
+        if arguments.size_x < 128:
+            sizey = random.randint(128, 1024)
+        else:
+            sizey = random.randint(128, arguments.size_y)
+        if arguments.line_width < 1:
+            lwidth = random.randint(1, 3)
+        else:
+            lwidth = random.randint(1, arguments.line_width)
         lwidthrng = bool(random.getrandbits(1))
+        if arguments.line_width_randomize:
+            lwidthrng = arguments.line_width_randomize
         sil = bool(random.getrandbits(1))
         if arguments.skip_incoming_line:
             sil = True
         lwidthrng = bool(random.getrandbits(1))
-        draw_tracks_on_canvas(amount, output_path, splits, starty, sizex, sizey, lwidth, lwidthrng, smphy, spr, True, True, sil)
+        draw_tracks_on_canvas(amount, output_path, mask_output, splits, starty, sizex, sizey, lwidth, lwidthrng, smphy, spr, True, True, sil)
         circles = bool(random.getrandbits(1))
         if circles:
-            circlesAmt = random.randint(0, 2)
+            circlesAmt = random.randint(0, arguments.circle_noise)
             drawCircles(output_path, circlesAmt, bw)
         noise = bool(random.getrandbits(1))
         if noise:
@@ -526,6 +549,7 @@ if __name__ == "__main__":
             draw_tracks_on_canvas(
                 arguments.amount,
                 arguments.output,
+                arguments.mask_path,
                 arguments.splits,
                 arguments.start_y,
                 arguments.size_x,
